@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1004686709332",
+    "project_id": "lkcpcoachcompanion",
+    "storage_bucket": "lkcpcoachcompanion.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1004686709332:android:b04beb8c2db75b75a193c1",
+        "android_client_info": {
+          "package_name": "com.example.littlekickersapp"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB1YUksUhWCt0Lcv6MXeq4pTN3iAOD6VEE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
