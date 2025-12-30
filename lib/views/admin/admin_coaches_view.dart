@@ -250,7 +250,7 @@ class _AdminCoachesViewState extends State<AdminCoachesView> {
                             labelText: 'Role',
                             border: OutlineInputBorder(),
                           ),
-                          value: _selectedRole,
+                          initialValue: _selectedRole,
                           isExpanded: true,
                           onChanged: (String? newValue) {
                             if (newValue != null) {

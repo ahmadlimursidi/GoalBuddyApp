@@ -140,7 +140,7 @@ class _AdminStudentsViewState extends State<AdminStudentsView> {
                       labelText: 'Filter by Age Group',
                       border: OutlineInputBorder(),
                     ),
-                    value: _filterAgeGroup,
+                    initialValue: _filterAgeGroup,
                     isExpanded: true,
                     onChanged: (String? newValue) {
                       if (newValue != null) {

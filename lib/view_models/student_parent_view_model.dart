@@ -266,7 +266,7 @@ class StudentParentViewModel extends ChangeNotifier {
         // Find the most recent session for this student to get the age group
         for (var record in _allAttendanceRecords) {
           // Get the age group from the first available record
-          if (record.ageGroup != null && record.ageGroup != 'Unknown') {
+          if (record.ageGroup != 'Unknown') {
             targetAgeGroup = record.ageGroup;
             break;
           }
@@ -512,7 +512,7 @@ class StudentParentViewModel extends ChangeNotifier {
     // Try to determine the age group from the attendance records we've already loaded
     if (childAgeGroup == null || childAgeGroup.isEmpty || childAgeGroup == 'Unknown') {
       for (var record in _allAttendanceRecords) {
-        if (record.ageGroup != null && record.ageGroup != 'Unknown') {
+        if (record.ageGroup != 'Unknown') {
           childAgeGroup = record.ageGroup;
           break;
         }

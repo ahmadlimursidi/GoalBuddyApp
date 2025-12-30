@@ -21,7 +21,6 @@ import 'views/session/active_session_view.dart';
 import 'views/session/attendance_view.dart';
 import 'views/session/student_list_view.dart';
 import 'views/session/student_profile_view.dart';
-import 'views/resources/drill_library_view.dart';
 import 'views/resources/coach_resources_view.dart';
 import 'views/admin/create_session_template_view.dart';
 import 'views/admin/schedule_class_view.dart';

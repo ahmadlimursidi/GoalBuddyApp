@@ -13,11 +13,11 @@ class DrillFormCard extends StatefulWidget {
   final int index;
 
   const DrillFormCard({
-    Key? key,
+    super.key,
     required this.drill,
     required this.onRemove,
     required this.index,
-  }) : super(key: key);
+  });
 
   @override
   State<DrillFormCard> createState() => _DrillFormCardState();
@@ -296,7 +296,7 @@ class _CreateSessionTemplateViewState extends State<CreateSessionTemplateView> {
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
   
   String? _selectedAgeGroup;
-  List<DrillData> _drills = [];
+  final List<DrillData> _drills = [];
   
   // Age groups for the dropdown
   final List<String> ageGroups = [
@@ -435,7 +435,7 @@ class _CreateSessionTemplateViewState extends State<CreateSessionTemplateView> {
                   border: OutlineInputBorder(),
                   prefixIcon: Icon(Icons.group),
                 ),
-                value: _selectedAgeGroup,
+                initialValue: _selectedAgeGroup,
                 items: ageGroups.map((String group) {
                   return DropdownMenuItem<String>(value: group, child: Text(group));
                 }).toList(),

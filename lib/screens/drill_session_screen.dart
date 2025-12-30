@@ -1,7 +1,6 @@
 // Sample drill session with Lottie animations
 import 'package:flutter/material.dart';
 import 'package:lottie/lottie.dart';
-import 'package:goalbuddy/widgets/lottie_animation_widget.dart';
 
 class DrillSessionScreen extends StatefulWidget {
   final String drillName;

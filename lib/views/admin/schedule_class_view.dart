@@ -86,7 +86,7 @@ class _ScheduleClassViewState extends State<ScheduleClassView> {
                           border: OutlineInputBorder(),
                           prefixIcon: Icon(Icons.list),
                         ),
-                        value: _selectedTemplateId,
+                        initialValue: _selectedTemplateId,
                         items: templates.map((template) {
                           return DropdownMenuItem<String>(
                             value: template.id,
@@ -171,7 +171,7 @@ class _ScheduleClassViewState extends State<ScheduleClassView> {
                           border: OutlineInputBorder(),
                           prefixIcon: Icon(Icons.person),
                         ),
-                        value: _selectedCoachId,
+                        initialValue: _selectedCoachId,
                         items: coaches.map((coach) {
                           Map<String, dynamic> data = coach.data() as Map<String, dynamic>;
                           return DropdownMenuItem<String>(

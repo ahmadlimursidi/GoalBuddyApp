@@ -27,7 +27,7 @@ class DrillLibraryViewModel extends ChangeNotifier {
     try {
       final drillMaps = await _firestoreService.getDrills();
       _allDrills = drillMaps
-          .where((d) => d is Map<String, dynamic>) // Filter out null documents
+          .whereType<Map<String, dynamic>>() // Filter out null documents
           .map((d) => Drill.fromMap(d))
           .toList();
 
