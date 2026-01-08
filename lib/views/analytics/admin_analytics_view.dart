@@ -242,7 +242,7 @@ class _AdminAnalyticsContent extends StatelessWidget {
 
   Widget _buildStatCard({required String title, required String value, required IconData icon, required Color color, required String subtitle}) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
@@ -252,44 +252,42 @@ class _AdminAnalyticsContent extends StatelessWidget {
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: [
           // Top section with Icon
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: color.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Icon(icon, size: 20, color: color),
-              ),
-            ],
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(icon, size: 18, color: color),
           ),
-          
+
           const Spacer(), // Pushes the text content to the bottom
-          
+
           // Text content with overflow protection
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
             children: [
               Text(
                 value,
-                style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: AppTheme.darkText),
+                style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppTheme.darkText),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
+              const SizedBox(height: 2),
               Text(
                 title,
-                style: TextStyle(fontSize: 13, color: Colors.grey[600], fontWeight: FontWeight.w500),
+                style: TextStyle(fontSize: 12, color: Colors.grey[600], fontWeight: FontWeight.w500),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
-              const SizedBox(height: 4),
+              const SizedBox(height: 2),
               Text(
                 subtitle,
-                style: TextStyle(fontSize: 10, color: Colors.grey[400]),
+                style: TextStyle(fontSize: 9, color: Colors.grey[400]),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
@@ -302,10 +300,26 @@ class _AdminAnalyticsContent extends StatelessWidget {
 
   // New Data Card: Capacity Utilization
   Widget _buildUtilizationCard(AnalyticsViewModel viewModel) {
-    // Mocking capacity data as it likely isn't in your ViewModel yet
-    // In real app, calculate this from (totalStudents / (totalClasses * maxCapacityPerClass))
-    double utilization = 0.78; 
-    
+    double utilization = viewModel.capacityUtilization;
+    int utilizationPercent = (utilization * 100).round();
+
+    // Determine status based on utilization
+    String status;
+    Color statusColor;
+    if (utilization >= 0.85) {
+      status = "FULL";
+      statusColor = Colors.red;
+    } else if (utilization >= 0.70) {
+      status = "HEALTHY";
+      statusColor = Colors.green;
+    } else if (utilization >= 0.50) {
+      status = "MODERATE";
+      statusColor = Colors.orange;
+    } else {
+      status = "LOW";
+      statusColor = Colors.blue;
+    }
+
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -324,16 +338,16 @@ class _AdminAnalyticsContent extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text("Class Utilization", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                  Text("Based on 15 students / class limit", style: TextStyle(fontSize: 12, color: Colors.grey)),
+                  Text("Based on age group capacities", style: TextStyle(fontSize: 12, color: Colors.grey)),
                 ],
               ),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 decoration: BoxDecoration(
-                  color: Colors.green.withOpacity(0.1),
+                  color: statusColor.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(20),
                 ),
-                child: const Text("HEALTHY", style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 10)),
+                child: Text(status, style: TextStyle(color: statusColor, fontWeight: FontWeight.bold, fontSize: 10)),
               )
             ],
           ),
@@ -351,7 +365,13 @@ class _AdminAnalyticsContent extends StatelessWidget {
                     height: 20,
                     width: constraints.maxWidth * utilization,
                     decoration: BoxDecoration(
-                      gradient: const LinearGradient(colors: [Colors.blue, Colors.lightBlueAccent]),
+                      gradient: LinearGradient(
+                        colors: utilization >= 0.85
+                            ? [Colors.red, Colors.redAccent]
+                            : utilization >= 0.70
+                                ? [Colors.green, Colors.lightGreen]
+                                : [Colors.blue, Colors.lightBlueAccent],
+                      ),
                       borderRadius: BorderRadius.circular(10),
                     ),
                   );
@@ -364,7 +384,7 @@ class _AdminAnalyticsContent extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text("0%", style: TextStyle(fontSize: 10, color: Colors.grey[400])),
-              Text("78% Filled", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey[700])),
+              Text("$utilizationPercent% Filled", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey[700])),
               Text("100%", style: TextStyle(fontSize: 10, color: Colors.grey[400])),
             ],
           )

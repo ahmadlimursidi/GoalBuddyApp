@@ -115,12 +115,17 @@ class StudentParentViewModel extends ChangeNotifier {
     notifyListeners();
 
     try {
+      print("DEBUG: Starting initializeStudentData()");
       await _findAndLoadStudentData();
+      print("DEBUG: _findAndLoadStudentData() completed. StudentId: $_studentId");
       await _loadAdditionalData();
+      print("DEBUG: _loadAdditionalData() completed.");
     } catch (e) {
       print("Error loading student data: $e");
+      print("Error stack trace: ${StackTrace.current}");
     } finally {
       _isLoading = false;
+      print("DEBUG: Setting isLoading to false. StudentId: $_studentId");
       notifyListeners();
     }
   }
@@ -128,29 +133,47 @@ class StudentParentViewModel extends ChangeNotifier {
   // Find student data associated with the current user
   Future<void> _findAndLoadStudentData() async {
     String? userId = _auth.currentUser?.uid;
-    if (userId == null) return;
-    
+    print("DEBUG: _findAndLoadStudentData() - Current user ID: $userId");
+
+    if (userId == null) {
+      print("DEBUG: No user logged in");
+      return;
+    }
+
     try {
       // First, try to find if this user is directly linked to a student in a user profile
       DocumentSnapshot userDoc = await _db.collection('users').doc(userId).get();
+      print("DEBUG: User document exists: ${userDoc.exists}");
+
       if (userDoc.exists && userDoc.data() != null) {
         Map<String, dynamic> userData = userDoc.data() as Map<String, dynamic>;
+        print("DEBUG: User data keys: ${userData.keys.toList()}");
+
         if (userData.containsKey('linkedStudentId')) {
           _studentId = userData['linkedStudentId'];
+          print("DEBUG: Found linkedStudentId in user profile: $_studentId");
+        } else {
+          print("DEBUG: No linkedStudentId found in user profile");
         }
       }
-      
+
       // If not found in user profile, try to find by parent contact info
       if (_studentId == null) {
+        print("DEBUG: Calling _findStudentByParentContact()");
         await _findStudentByParentContact();
+        print("DEBUG: _findStudentByParentContact() completed. StudentId: $_studentId");
       }
 
       if (_studentId != null) {
+        print("DEBUG: Loading student profile for ID: $_studentId");
         await _loadStudentProfile();
         await _loadAttendanceRecords();
+      } else {
+        print("DEBUG: Student ID is still null after search");
       }
     } catch (e) {
       print("Error finding student data: $e");
+      print("Error stack trace: ${StackTrace.current}");
     }
   }
 

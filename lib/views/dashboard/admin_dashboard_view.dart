@@ -7,6 +7,7 @@ import '../../services/firestore_service.dart';
 import '../finance/finance_view.dart';
 import '../admin/class_details_view.dart';
 import '../admin/session_templates_list_view.dart';
+import '../admin/past_sessions_view.dart';
 import '../analytics/admin_analytics_view.dart';
 
 class AdminDashboardView extends StatefulWidget {
@@ -224,146 +225,222 @@ class _AdminDashboardViewState extends State<AdminDashboardView> {
     String rawStatus = data['status'] ?? 'SCHEDULED';
     String status = rawStatus.toUpperCase();
     Color statusColor = (status == 'ACTIVE' || status == 'COMPLETED') ? AppTheme.pitchGreen : Colors.orange;
+    bool isCompleted = status == 'COMPLETED';
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
+    return Dismissible(
+      key: Key(docId),
+      direction: isCompleted ? DismissDirection.endToStart : DismissDirection.none,
+      background: Container(
+        margin: const EdgeInsets.only(bottom: 16),
+        decoration: BoxDecoration(
+          color: AppTheme.pitchGreen,
           borderRadius: BorderRadius.circular(16),
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => ClassDetailsView(
-                  classId: docId,
-                  classData: data,
-                ),
+        ),
+        alignment: Alignment.centerRight,
+        padding: const EdgeInsets.only(right: 20),
+        child: const Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.archive, color: Colors.white, size: 32),
+            SizedBox(height: 4),
+            Text(
+              'Archive',
+              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+            ),
+          ],
+        ),
+      ),
+      confirmDismiss: (direction) async {
+        return await showDialog(
+          context: context,
+          builder: (BuildContext context) {
+            return AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              title: const Row(
+                children: [
+                  Icon(Icons.archive, color: AppTheme.pitchGreen),
+                  SizedBox(width: 8),
+                  Text('Archive Session'),
+                ],
               ),
+              content: Text('Move "${data['className'] ?? 'this session'}" to past sessions?'),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(false),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  onPressed: () => Navigator.of(context).pop(true),
+                  style: ElevatedButton.styleFrom(backgroundColor: AppTheme.pitchGreen),
+                  child: const Text('Archive'),
+                ),
+              ],
             );
           },
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              children: [
-                // Icon Box
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: AppTheme.primaryRed.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(12),
+        );
+      },
+      onDismissed: (direction) async {
+        try {
+          await _firestoreService.archiveSession(docId);
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Session archived successfully'),
+                backgroundColor: AppTheme.pitchGreen,
+              ),
+            );
+          }
+        } catch (e) {
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Error archiving session: $e'),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
+        }
+      },
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(16),
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => ClassDetailsView(
+                    classId: docId,
+                    classData: data,
                   ),
-                  child: const Icon(Icons.calendar_today_rounded, color: AppTheme.primaryRed),
                 ),
-                const SizedBox(width: 16),
-                
-                // Content
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        data['className'] ?? 'Unknown Class',
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: AppTheme.darkText,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const SizedBox(height: 6),
-                      Row(
-                        children: [
-                          Icon(Icons.location_on, size: 14, color: Colors.grey[500]),
-                          const SizedBox(width: 4),
-                          Expanded(
-                            child: Text(
-                              data['venue'] ?? 'Unknown Venue',
-                              style: TextStyle(color: Colors.grey[600], fontSize: 13),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-                
-                // Status Badge & Actions
-                const SizedBox(width: 8),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: statusColor.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text(
-                        status,
-                        style: TextStyle(
-                          color: statusColor,
-                          fontSize: 11,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
+              );
+            },
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                children: [
+                  // Icon Box
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: AppTheme.primaryRed.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12),
                     ),
-                    const SizedBox(height: 8),
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
+                    child: const Icon(Icons.calendar_today_rounded, color: AppTheme.primaryRed),
+                  ),
+                  const SizedBox(width: 16),
+
+                  // Content
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Icon(Icons.chevron_right, color: Colors.grey, size: 20),
-                        PopupMenuButton<String>(
-                          icon: const Icon(Icons.more_vert, color: Colors.grey, size: 20),
-                          padding: EdgeInsets.zero,
-                          onSelected: (value) {
-                            if (value == 'edit') {
-                              _editClass(context, docId, data);
-                            } else if (value == 'delete') {
-                              _deleteClass(context, docId, data);
-                            }
-                          },
-                          itemBuilder: (context) => [
-                            const PopupMenuItem(
-                              value: 'edit',
-                              child: Row(
-                                children: [
-                                  Icon(Icons.edit_outlined, size: 18, color: AppTheme.primaryRed),
-                                  SizedBox(width: 8),
-                                  Text('Edit'),
-                                ],
-                              ),
-                            ),
-                            const PopupMenuItem(
-                              value: 'delete',
-                              child: Row(
-                                children: [
-                                  Icon(Icons.delete_outline, size: 18, color: Colors.red),
-                                  SizedBox(width: 8),
-                                  Text('Delete'),
-                                ],
+                        Text(
+                          data['className'] ?? 'Unknown Class',
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: AppTheme.darkText,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 6),
+                        Row(
+                          children: [
+                            Icon(Icons.location_on, size: 14, color: Colors.grey[500]),
+                            const SizedBox(width: 4),
+                            Expanded(
+                              child: Text(
+                                data['venue'] ?? 'Unknown Venue',
+                                style: TextStyle(color: Colors.grey[600], fontSize: 13),
+                                overflow: TextOverflow.ellipsis,
                               ),
                             ),
                           ],
                         ),
                       ],
                     ),
-                  ],
-                ),
-              ],
+                  ),
+
+                  // Status Badge & Actions
+                  const SizedBox(width: 8),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: statusColor.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          status,
+                          style: TextStyle(
+                            color: statusColor,
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.chevron_right, color: Colors.grey, size: 20),
+                          PopupMenuButton<String>(
+                            icon: const Icon(Icons.more_vert, color: Colors.grey, size: 20),
+                            padding: EdgeInsets.zero,
+                            onSelected: (value) {
+                              if (value == 'edit') {
+                                _editClass(context, docId, data);
+                              } else if (value == 'delete') {
+                                _deleteClass(context, docId, data);
+                              }
+                            },
+                            itemBuilder: (context) => [
+                              const PopupMenuItem(
+                                value: 'edit',
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.edit_outlined, size: 18, color: AppTheme.primaryRed),
+                                    SizedBox(width: 8),
+                                    Text('Edit'),
+                                  ],
+                                ),
+                              ),
+                              const PopupMenuItem(
+                                value: 'delete',
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.delete_outline, size: 18, color: Colors.red),
+                                    SizedBox(width: 8),
+                                    Text('Delete'),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -457,6 +534,11 @@ class _AdminDashboardViewState extends State<AdminDashboardView> {
                       Navigator.pop(context);
                       _resetFab();
                       Navigator.pushNamed(context, '/schedule_class');
+                    }),
+                    _buildBottomSheetItem(Icons.archive, "Past Sessions", "View archived sessions", () {
+                      Navigator.pop(context);
+                      _resetFab();
+                      Navigator.push(context, MaterialPageRoute(builder: (context) => const PastSessionsView()));
                     }),
                     const Divider(height: 1),
                     _buildBottomSheetItem(Icons.school, "Manage Students", "View roster", () {
@@ -788,7 +870,7 @@ class _AdminDashboardViewState extends State<AdminDashboardView> {
           ElevatedButton(
             onPressed: () async {
               try {
-                await FirebaseFirestore.instance.collection('sessions').doc(classId).delete();
+                await _firestoreService.deleteSession(classId);
 
                 if (context.mounted) {
                   Navigator.pop(context);

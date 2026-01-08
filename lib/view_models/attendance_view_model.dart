@@ -155,7 +155,7 @@ class AttendanceViewModel extends ChangeNotifier {
     }
   }
 
-  // Save attendance record to session subcollection
+  // Save attendance record to session subcollection AND update student's attendanceHistory
   Future<void> _saveAttendanceToSession(String studentId, StudentAttendance student) async {
     if (_sessionId == null) return;
 
@@ -169,6 +169,7 @@ class AttendanceViewModel extends ChangeNotifier {
 
       String collectionName = scheduledClassDoc.exists ? 'scheduled_classes' : 'sessions';
 
+      // 1. Save to session's subcollection for immediate session tracking
       await FirebaseFirestore.instance
           .collection(collectionName)
           .doc(_sessionId!)
@@ -183,6 +184,24 @@ class AttendanceViewModel extends ChangeNotifier {
         'ageGroup': student.ageGroup,
         'lastUpdated': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
+
+      // 2. Update the student's attendanceHistory field in the main students collection
+      // This makes the attendance visible in:
+      // - Student profile view
+      // - Analytics view
+      // - Parent dashboard
+      // - Past sessions view
+      await FirebaseFirestore.instance
+          .collection('students')
+          .doc(studentId)
+          .update({
+        'attendanceHistory.$_sessionId': student.isPresent ? 'Present' : 'Absent',
+        'lastUpdated': FieldValue.serverTimestamp(),
+      });
+
+      if (kDebugMode) {
+        debugPrint("Attendance saved for student $studentId in session $_sessionId: ${student.isPresent ? 'Present' : 'Absent'}");
+      }
     } catch (e) {
       debugPrint("Error saving attendance: $e");
     }
@@ -192,7 +211,9 @@ class AttendanceViewModel extends ChangeNotifier {
   Future<void> _updateAttendanceStatusForStudents(List<DocumentSnapshot> studentDocs, String sessionCollection) async {
     for (var doc in studentDocs) {
       try {
-        // Get attendance from the correct collection based on where the session exists
+        bool isPresent = false;
+
+        // Try to get attendance from session subcollection first
         DocumentSnapshot attendanceDoc = await FirebaseFirestore.instance
             .collection(sessionCollection)
             .doc(_sessionId)
@@ -200,11 +221,19 @@ class AttendanceViewModel extends ChangeNotifier {
             .doc(doc.id)
             .get();
 
-        bool isPresent = false;
-
         if (attendanceDoc.exists) {
           final attendanceData = attendanceDoc.data() as Map<String, dynamic>?;
           isPresent = attendanceData != null ? attendanceData['isPresent'] ?? false : false;
+        } else {
+          // Fallback: check student's attendanceHistory for this session
+          final studentData = doc.data() as Map<String, dynamic>?;
+          if (studentData != null) {
+            final attendanceHistory = studentData['attendanceHistory'] as Map<String, dynamic>?;
+            if (attendanceHistory != null && attendanceHistory.containsKey(_sessionId)) {
+              String status = attendanceHistory[_sessionId].toString().toLowerCase();
+              isPresent = (status == 'present' || status == 'p');
+            }
+          }
         }
 
         // Update the student in the list

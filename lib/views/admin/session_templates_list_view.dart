@@ -272,22 +272,22 @@ class SessionTemplatesListView extends StatelessWidget {
                 const Divider(height: 1, thickness: 1, color: Color(0xFFEEEEEE)),
                 const SizedBox(height: 16),
                 // Metadata Chips and PDF Button
-                Row(
+                Wrap(
+                  spacing: 12,
+                  runSpacing: 8,
                   children: [
                     _buildInfoChip(
                       icon: Icons.child_care,
                       label: data['ageGroup'] ?? 'All Ages',
                       color: AppTheme.pitchGreen,
                     ),
-                    const SizedBox(width: 12),
                     _buildInfoChip(
                       icon: Icons.emoji_events,
                       label: data['badgeFocus'] ?? 'None',
                       color: Colors.orange,
                     ),
                     // Show PDF badge if PDF is available
-                    if (data['pdfUrl'] != null && data['pdfUrl'].toString().isNotEmpty) ...[
-                      const SizedBox(width: 12),
+                    if (data['pdfUrl'] != null && data['pdfUrl'].toString().isNotEmpty)
                       InkWell(
                         onTap: () {
                           Navigator.push(
@@ -323,8 +323,32 @@ class SessionTemplatesListView extends StatelessWidget {
                             ],
                           ),
                         ),
+                      )
+                    else
+                      // DEBUG: Show when NO PDF (remove this after testing)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: Colors.grey.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.grey.withOpacity(0.3)),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.info_outline, size: 14, color: Colors.grey),
+                            const SizedBox(width: 6),
+                            Text(
+                              'No PDF',
+                              style: TextStyle(
+                                color: Colors.grey[600],
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                    ],
                   ],
                 ),
               ],

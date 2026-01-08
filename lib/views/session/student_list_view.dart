@@ -64,10 +64,9 @@ class _StudentListViewState extends State<StudentListView> {
           ));
           uniqueStudentIds.add(studentId);
 
-          // Store age group if available (from assignedClassId)
-          if (data.containsKey('assignedClassId')) {
-            // We'll resolve the age group later when we have all session data
-            studentAgeGroupMap[studentId] = data['assignedClassId'];
+          // Store age group directly if available
+          if (data.containsKey('ageGroup') && data['ageGroup'] != null && data['ageGroup'].toString().isNotEmpty) {
+            studentAgeGroupMap[studentId] = data['ageGroup'];
           }
         }
       }

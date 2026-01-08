@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:file_picker/file_picker.dart';
+import 'dart:convert';
 import '../../view_models/admin_view_model.dart';
 import '../../config/theme.dart';
 import '../../widgets/pdf_upload_button.dart';
+import '../../widgets/drill_animation_player.dart';
 import '../../models/drill_data.dart';
+import '../../models/drill_animation_data.dart';
+import '../../services/gemini_animation_service.dart';
 
 // --- DRILL FORM CARD WIDGET ---
 class DrillFormCard extends StatefulWidget {
@@ -34,6 +38,9 @@ class _DrillFormCardState extends State<DrillFormCard> {
 
   String? _selectedAnimationFile;
   bool _isExpanded = true;
+  bool _isGeneratingAnimation = false;
+  DrillAnimationData? _generatedAnimation;
+  final GeminiAnimationService _animationService = GeminiAnimationService();
 
   @override
   void initState() {
@@ -56,6 +63,15 @@ class _DrillFormCardState extends State<DrillFormCard> {
 
     if (widget.drill.animationUrl != null && widget.drill.animationUrl!.isNotEmpty) {
       _selectedAnimationFile = widget.drill.animationUrl;
+    }
+
+    // Load existing animation if present
+    if (widget.drill.animationJson != null && widget.drill.animationJson!.isNotEmpty) {
+      try {
+        _generatedAnimation = DrillAnimationData.fromJson(jsonDecode(widget.drill.animationJson!));
+      } catch (e) {
+        print('Error loading animation: $e');
+      }
     }
 
     _titleController.addListener(_updateDrill);
@@ -89,18 +105,135 @@ class _DrillFormCardState extends State<DrillFormCard> {
     widget.drill.learningGoals = _learningGoalsController.text;
   }
 
-  Future<void> _uploadAnimation() async {
+  /// Manual file upload (video, image, GIF, or Lottie)
+  Future<void> _pickVisualFile() async {
     FilePickerResult? result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
-      allowedExtensions: ['json'],
+      allowedExtensions: ['json', 'mp4', 'gif', 'png', 'jpg', 'jpeg'],
       withData: true,
     );
 
     if (result != null && result.files.first.bytes != null) {
+      final fileName = result.files.first.name;
+      final extension = fileName.split('.').last.toLowerCase();
+
       setState(() {
-        _selectedAnimationFile = result.files.first.name;
-        widget.drill.animationUrl = result.files.first.name; 
+        _selectedAnimationFile = fileName;
+        widget.drill.animationUrl = fileName;
+
+        // Set visual type based on file extension
+        if (extension == 'json') {
+          widget.drill.visualType = 'animation';
+        } else if (extension == 'mp4') {
+          widget.drill.visualType = 'video';
+        } else if (extension == 'gif') {
+          widget.drill.visualType = 'gif';
+        } else {
+          widget.drill.visualType = 'image';
+        }
+
+        // Clear AI-generated animation if switching to manual upload
+        _generatedAnimation = null;
+        widget.drill.animationJson = null;
       });
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('✅ ${_getVisualTypeName()} uploaded: $fileName')),
+      );
+    }
+  }
+
+  /// AI Animation Generation
+  Future<void> _generateAnimation() async {
+    // Validate that we have minimum required info
+    if (_titleController.text.isEmpty || _instructionsController.text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('⚠️ Please fill in Activity Title and Instructions first'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    setState(() => _isGeneratingAnimation = true);
+
+    try {
+      final animationData = await _animationService.generateAnimation(
+        drillTitle: _titleController.text,
+        instructions: _instructionsController.text,
+        equipment: _equipmentController.text,
+        progressionEasier: _progressionEasierController.text.isNotEmpty
+            ? _progressionEasierController.text
+            : null,
+        progressionHarder: _progressionHarderController.text.isNotEmpty
+            ? _progressionHarderController.text
+            : null,
+      );
+
+      if (!mounted) return;
+
+      if (animationData != null) {
+        setState(() {
+          _generatedAnimation = animationData;
+          widget.drill.animationJson = jsonEncode(animationData.toJson());
+          widget.drill.visualType = 'animation';
+
+          // Clear manual upload if switching to AI
+          _selectedAnimationFile = null;
+          widget.drill.animationUrl = null;
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('✨ Animation generated successfully!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('❌ Failed to generate animation. Please try again.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('❌ Error: ${e.toString()}'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isGeneratingAnimation = false);
+      }
+    }
+  }
+
+  void _removeVisual() {
+    setState(() {
+      _selectedAnimationFile = null;
+      _generatedAnimation = null;
+      widget.drill.animationUrl = null;
+      widget.drill.animationJson = null;
+      widget.drill.visualType = null;
+    });
+  }
+
+  String _getVisualTypeName() {
+    if (_generatedAnimation != null) return 'AI Animation';
+    if (_selectedAnimationFile == null) return 'Visual';
+
+    final ext = _selectedAnimationFile!.split('.').last.toLowerCase();
+    switch (ext) {
+      case 'json': return 'Lottie Animation';
+      case 'mp4': return 'Video';
+      case 'gif': return 'GIF';
+      default: return 'Image';
     }
   }
 
@@ -254,52 +387,9 @@ class _DrillFormCardState extends State<DrillFormCard> {
                     maxLines: 2,
                   ),
                   const SizedBox(height: 16),
-                  
-                  // Animation Upload
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.grey[50],
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.grey[300]!, style: BorderStyle.solid),
-                    ),
-                    child: Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: Colors.blue.withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: const Icon(Icons.movie_filter, color: Colors.blue),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text(
-                                "Tactical Animation",
-                                style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppTheme.darkText),
-                              ),
-                              Text(
-                                _selectedAnimationFile ?? "Upload .json Lottie file",
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: _selectedAnimationFile != null ? Colors.green : Colors.grey,
-                                ),
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ],
-                          ),
-                        ),
-                        TextButton(
-                          onPressed: _uploadAnimation,
-                          child: const Text("Browse"),
-                        ),
-                      ],
-                    ),
-                  ),
+
+                  // ========== VISUALS MANAGER ==========
+                  _buildVisualsManager(),
                 ],
               ),
             ),
@@ -307,6 +397,233 @@ class _DrillFormCardState extends State<DrillFormCard> {
         ],
       ),
     );
+  }
+
+  Widget _buildVisualsManager() {
+    final bool hasVisual = _generatedAnimation != null || _selectedAnimationFile != null;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.grey[50],
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.grey[300]!),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.deepPurple.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(Icons.play_circle_outline, color: Colors.deepPurple, size: 20),
+                ),
+                const SizedBox(width: 12),
+                const Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        "Drill Visuals",
+                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppTheme.darkText),
+                      ),
+                      Text(
+                        "Add animation, video, or image",
+                        style: TextStyle(fontSize: 11, color: Colors.grey),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          const Divider(height: 1),
+
+          // Preview Area
+          if (hasVisual) ...[
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.grey[200]!),
+                ),
+                child: Column(
+                  children: [
+                    // Animation Preview
+                    if (_generatedAnimation != null) ...[
+                      ClipRRect(
+                        borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+                        child: DrillAnimationPlayer(
+                          animationData: _generatedAnimation!,
+                          width: double.infinity,
+                          height: 200,
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.auto_awesome, color: Colors.deepPurple, size: 16),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                _generatedAnimation!.description.isNotEmpty
+                                    ? _generatedAnimation!.description
+                                    : 'AI-Generated Animation',
+                                style: const TextStyle(fontSize: 12, color: Colors.grey),
+                              ),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.close, size: 18),
+                              onPressed: _removeVisual,
+                              tooltip: 'Remove',
+                            ),
+                          ],
+                        ),
+                      ),
+                    ]
+                    // File Upload Preview
+                    else if (_selectedAnimationFile != null) ...[
+                      Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: Colors.green.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Icon(
+                                _getFileIcon(),
+                                color: Colors.green,
+                                size: 24,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    _getVisualTypeName(),
+                                    style: const TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.w500),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    _selectedAnimationFile!,
+                                    style: const TextStyle(fontSize: 13, color: AppTheme.darkText),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ],
+                              ),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.close, size: 18),
+                              onPressed: _removeVisual,
+                              tooltip: 'Remove',
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          ] else ...[
+            // No Visual Selected State
+            Padding(
+              padding: const EdgeInsets.all(24),
+              child: Center(
+                child: Column(
+                  children: [
+                    Icon(Icons.add_photo_alternate_outlined, size: 48, color: Colors.grey[300]),
+                    const SizedBox(height: 8),
+                    Text(
+                      "No visual selected",
+                      style: TextStyle(color: Colors.grey[500], fontSize: 13),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+
+          // Action Buttons
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            child: Row(
+              children: [
+                // Manual Upload Button
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: _pickVisualFile,
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppTheme.primaryRed,
+                      side: const BorderSide(color: AppTheme.primaryRed),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                    icon: const Icon(Icons.folder_open, size: 18),
+                    label: const Text("Upload File", style: TextStyle(fontSize: 13)),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                // AI Generate Button
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: _isGeneratingAnimation ? null : _generateAnimation,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.deepPurple,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      elevation: 2,
+                    ),
+                    icon: _isGeneratingAnimation
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                          )
+                        : const Icon(Icons.auto_awesome, size: 18),
+                    label: Text(
+                      _isGeneratingAnimation ? "Generating..." : "AI Animate",
+                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  IconData _getFileIcon() {
+    if (_selectedAnimationFile == null) return Icons.insert_drive_file;
+    final ext = _selectedAnimationFile!.split('.').last.toLowerCase();
+    switch (ext) {
+      case 'json': return Icons.animation;
+      case 'mp4': return Icons.video_file;
+      case 'gif': return Icons.gif_box;
+      case 'png':
+      case 'jpg':
+      case 'jpeg':
+        return Icons.image;
+      default: return Icons.insert_drive_file;
+    }
   }
 
   Widget _buildTextField({
@@ -471,8 +788,16 @@ class _CreateSessionTemplateViewState extends State<CreateSessionTemplateView> {
                             if (planData['badge_focus'] != null) _badgeFocusController.text = planData['badge_focus'].toString();
 
                             // Capture PDF metadata
-                            if (planData['pdfUrl'] != null) _pdfUrl = planData['pdfUrl'].toString();
-                            if (planData['pdfFileName'] != null) _pdfFileName = planData['pdfFileName'].toString();
+                            if (planData['pdfUrl'] != null) {
+                              _pdfUrl = planData['pdfUrl'].toString();
+                              print('📄 PDF URL captured: $_pdfUrl');
+                            } else {
+                              print('⚠️ No pdfUrl in planData');
+                            }
+                            if (planData['pdfFileName'] != null) {
+                              _pdfFileName = planData['pdfFileName'].toString();
+                              print('📄 PDF filename captured: $_pdfFileName');
+                            }
 
                             if (planData['drills'] != null && planData['drills'] is List) {
                               _drills.clear();
@@ -610,24 +935,64 @@ class _CreateSessionTemplateViewState extends State<CreateSessionTemplateView> {
                       height: 56,
                       child: ElevatedButton(
                         onPressed: viewModel.isLoading ? null : () async {
-                          if (!_formKey.currentState!.validate()) return;
-                          if (_drills.isEmpty) {
-                            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Add at least one activity"), backgroundColor: Colors.red));
+                          if (!_formKey.currentState!.validate()) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text("Please fill in all required fields"),
+                                backgroundColor: Colors.red,
+                              ),
+                            );
                             return;
                           }
-                          
-                          bool success = await viewModel.createTemplate(
-                            title: _titleController.text.trim(),
-                            ageGroup: _selectedAgeGroup!,
-                            badgeFocus: _badgeFocusController.text.trim(),
-                            drills: _drills,
-                            pdfUrl: _pdfUrl,
-                            pdfFileName: _pdfFileName,
-                          );
+                          if (_drills.isEmpty) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text("Add at least one activity"),
+                                backgroundColor: Colors.red,
+                              ),
+                            );
+                            return;
+                          }
 
-                          if (success && context.mounted) {
-                            Navigator.pop(context);
-                            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Template Saved!"), backgroundColor: Colors.green));
+                          try {
+                            print('💾 Saving template with pdfUrl: $_pdfUrl, pdfFileName: $_pdfFileName');
+                            bool success = await viewModel.createTemplate(
+                              title: _titleController.text.trim(),
+                              ageGroup: _selectedAgeGroup!,
+                              badgeFocus: _badgeFocusController.text.trim(),
+                              drills: _drills,
+                              pdfUrl: _pdfUrl,
+                              pdfFileName: _pdfFileName,
+                            );
+
+                            if (!context.mounted) return;
+
+                            if (success) {
+                              Navigator.pop(context);
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text("Template Saved Successfully!"),
+                                  backgroundColor: Colors.green,
+                                ),
+                              );
+                            } else {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text("Failed to save template. Please try again."),
+                                  backgroundColor: Colors.red,
+                                  duration: Duration(seconds: 4),
+                                ),
+                              );
+                            }
+                          } catch (e) {
+                            if (!context.mounted) return;
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text("Error: ${e.toString()}"),
+                                backgroundColor: Colors.red,
+                                duration: const Duration(seconds: 5),
+                              ),
+                            );
                           }
                         },
                         style: ElevatedButton.styleFrom(

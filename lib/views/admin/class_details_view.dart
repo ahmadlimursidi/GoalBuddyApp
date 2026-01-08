@@ -185,6 +185,11 @@ class _ClassDetailsViewState extends State<ClassDetailsView> {
                   ],
                 ),
 
+                // Section: Attendance
+                const SizedBox(height: 24),
+                _buildSectionTitle("Class Attendance"),
+                _buildAttendanceSection(),
+
                 // Section: Additional Info
                 if (widget.classData['instructions'] != null ||
                     widget.classData['equipment'] != null ||
@@ -414,6 +419,192 @@ class _ClassDetailsViewState extends State<ClassDetailsView> {
           style: TextStyle(color: Colors.grey[700], height: 1.5),
         ),
         if (!isLast) const Divider(height: 32),
+      ],
+    );
+  }
+
+  Widget _buildAttendanceSection() {
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('sessions')
+          .doc(widget.classId)
+          .collection('students')
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return Container(
+            padding: const EdgeInsets.all(40),
+            decoration: _cardDecoration(),
+            child: const Center(
+              child: CircularProgressIndicator(color: AppTheme.primaryRed),
+            ),
+          );
+        }
+
+        if (snapshot.hasError) {
+          return Container(
+            padding: const EdgeInsets.all(20),
+            decoration: _cardDecoration(),
+            child: Center(
+              child: Text('Error loading attendance: ${snapshot.error}'),
+            ),
+          );
+        }
+
+        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+          return Container(
+            padding: const EdgeInsets.all(40),
+            decoration: _cardDecoration(),
+            child: Center(
+              child: Column(
+                children: [
+                  Icon(Icons.people_outline, size: 48, color: Colors.grey[400]),
+                  const SizedBox(height: 12),
+                  Text(
+                    'No attendance recorded yet',
+                    style: TextStyle(color: Colors.grey[600], fontSize: 14),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+
+        final students = snapshot.data!.docs;
+        final presentCount = students.where((doc) {
+          final data = doc.data() as Map<String, dynamic>;
+          return data['isPresent'] == true;
+        }).length;
+        final totalCount = students.length;
+
+        return Column(
+          children: [
+            // Summary Card
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: _cardDecoration(),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: _buildAttendanceStat(
+                      'Total',
+                      totalCount.toString(),
+                      Icons.people,
+                      Colors.blue,
+                    ),
+                  ),
+                  Container(width: 1, height: 40, color: Colors.grey[300]),
+                  Expanded(
+                    child: _buildAttendanceStat(
+                      'Present',
+                      presentCount.toString(),
+                      Icons.check_circle,
+                      AppTheme.pitchGreen,
+                    ),
+                  ),
+                  Container(width: 1, height: 40, color: Colors.grey[300]),
+                  Expanded(
+                    child: _buildAttendanceStat(
+                      'Absent',
+                      (totalCount - presentCount).toString(),
+                      Icons.cancel,
+                      Colors.red,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+
+            // Student List
+            Container(
+              decoration: _cardDecoration(),
+              child: ListView.separated(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: students.length,
+                separatorBuilder: (context, index) => Divider(height: 1, color: Colors.grey[200]),
+                itemBuilder: (context, index) {
+                  final studentDoc = students[index];
+                  final data = studentDoc.data() as Map<String, dynamic>;
+                  final isPresent = data['isPresent'] ?? false;
+                  final studentName = data['name'] ?? 'Unknown';
+
+                  return ListTile(
+                    leading: CircleAvatar(
+                      backgroundColor: isPresent
+                          ? AppTheme.pitchGreen.withOpacity(0.1)
+                          : Colors.red.withOpacity(0.1),
+                      child: Icon(
+                        isPresent ? Icons.check : Icons.close,
+                        color: isPresent ? AppTheme.pitchGreen : Colors.red,
+                        size: 20,
+                      ),
+                    ),
+                    title: Text(
+                      studentName,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w600,
+                        color: AppTheme.darkText,
+                      ),
+                    ),
+                    subtitle: Text(
+                      isPresent ? 'Present' : 'Absent',
+                      style: TextStyle(
+                        color: isPresent ? AppTheme.pitchGreen : Colors.red,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    trailing: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: isPresent
+                            ? AppTheme.pitchGreen.withOpacity(0.1)
+                            : Colors.red.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        isPresent ? 'P' : 'A',
+                        style: TextStyle(
+                          color: isPresent ? AppTheme.pitchGreen : Colors.red,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildAttendanceStat(String label, String value, IconData icon, Color color) {
+    return Column(
+      children: [
+        Icon(icon, color: color, size: 24),
+        const SizedBox(height: 8),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 24,
+            fontWeight: FontWeight.bold,
+            color: color,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            color: Colors.grey[600],
+            fontWeight: FontWeight.w500,
+          ),
+        ),
       ],
     );
   }

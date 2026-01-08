@@ -15,6 +15,15 @@ class AnalyticsViewModel extends ChangeNotifier {
   double _overallAttendanceRate = 0.0;
   Map<String, AttendanceData> _ageGroupAttendance = {};
   Map<String, int> _ageGroupStudentCounts = {};
+  Map<String, int> _ageGroupClassCounts = {};
+
+  // Age group capacities
+  static const Map<String, int> ageGroupCapacities = {
+    'Mega Kickers': 22,
+    'Mighty Kickers': 20,
+    'Junior Kickers': 12,
+    'Little Kickers': 10,
+  };
 
   // Getters
   String? get selectedAgeGroup => _selectedAgeGroup;
@@ -26,6 +35,25 @@ class AnalyticsViewModel extends ChangeNotifier {
   double get overallAttendanceRate => _overallAttendanceRate;
   Map<String, AttendanceData> get ageGroupAttendance => _ageGroupAttendance;
   Map<String, int> get ageGroupStudentCounts => _ageGroupStudentCounts;
+  Map<String, int> get ageGroupClassCounts => _ageGroupClassCounts;
+
+  // Calculate overall capacity utilization
+  double get capacityUtilization {
+    int totalCapacity = 0;
+    int totalEnrolled = 0;
+
+    for (var entry in _ageGroupClassCounts.entries) {
+      String ageGroup = entry.key;
+      int classCount = entry.value;
+      int capacity = ageGroupCapacities[ageGroup] ?? 15;
+      int enrolled = _ageGroupStudentCounts[ageGroup] ?? 0;
+
+      totalCapacity += (classCount * capacity);
+      totalEnrolled += enrolled;
+    }
+
+    return totalCapacity > 0 ? (totalEnrolled / totalCapacity) : 0.0;
+  }
 
   List<String> get ageGroups => ['All', 'Little Kickers', 'Junior Kickers', 'Mighty Kickers', 'Mega Kickers'];
 
@@ -61,6 +89,7 @@ class AnalyticsViewModel extends ChangeNotifier {
       Map<String, int> ageGroupPresent = {};
       Map<String, int> ageGroupTotal = {};
       _ageGroupStudentCounts = {};
+      _ageGroupClassCounts = {};
 
       // Process students
       for (var studentDoc in studentSnapshot.docs) {
@@ -100,6 +129,8 @@ class AnalyticsViewModel extends ChangeNotifier {
 
       // Process sessions to count unique classes
       Set<String> uniqueClasses = {};
+      Map<String, Set<String>> ageGroupClasses = {};
+
       for (var sessionDoc in sessionSnapshot.docs) {
         try {
           final sessionData = sessionDoc.data() as Map<String, dynamic>?;
@@ -114,12 +145,23 @@ class AnalyticsViewModel extends ChangeNotifier {
           }
 
           uniqueClasses.add('$className-$ageGroup');
+
+          // Track classes per age group
+          if (!ageGroupClasses.containsKey(ageGroup)) {
+            ageGroupClasses[ageGroup] = {};
+          }
+          ageGroupClasses[ageGroup]!.add(className);
         } catch (sessionError) {
           debugPrint("Error processing session document: $sessionError");
           continue;
         }
       }
       _totalClasses = uniqueClasses.length;
+
+      // Count classes per age group
+      ageGroupClasses.forEach((ageGroup, classes) {
+        _ageGroupClassCounts[ageGroup] = classes.length;
+      });
 
       // Calculate overall attendance rate
       if (totalAttendanceSlots > 0) {

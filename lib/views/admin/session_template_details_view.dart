@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:lottie/lottie.dart';
+import 'dart:convert';
 import '../../config/theme.dart';
 import '../../models/drill_data.dart';
+import '../../models/drill_animation_data.dart';
 import '../../widgets/pdf_viewer_widget.dart';
+import '../../widgets/drill_animation_player.dart';
 
 class SessionTemplateDetailsView extends StatelessWidget {
   final String templateId;
@@ -379,8 +382,9 @@ class SessionTemplateDetailsView extends StatelessWidget {
                         ],
                       ),
                     ),
-                  // Animation badge
-                  if (drill.animationUrl != null && drill.animationUrl!.isNotEmpty)
+                  // Animation badge - AI or manual
+                  if ((drill.animationJson != null && drill.animationJson!.isNotEmpty) ||
+                      (drill.animationUrl != null && drill.animationUrl!.isNotEmpty))
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                       decoration: BoxDecoration(
@@ -391,10 +395,18 @@ class SessionTemplateDetailsView extends StatelessWidget {
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Icon(Icons.play_circle, size: 14, color: Colors.orange),
+                          Icon(
+                            drill.animationJson != null && drill.animationJson!.isNotEmpty
+                                ? Icons.auto_awesome
+                                : Icons.play_circle,
+                            size: 14,
+                            color: Colors.orange,
+                          ),
                           const SizedBox(width: 6),
                           Text(
-                            'Animation',
+                            drill.animationJson != null && drill.animationJson!.isNotEmpty
+                                ? 'AI Animation'
+                                : 'Animation',
                             style: TextStyle(
                               color: Colors.orange[700],
                               fontSize: 12,
@@ -501,8 +513,9 @@ class SessionTemplateDetailsView extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Animation/Visual
-                        if (drill.animationUrl != null && drill.animationUrl!.isNotEmpty) ...[
+                        // Animation/Visual - AI-generated or manual upload
+                        if ((drill.animationJson != null && drill.animationJson!.isNotEmpty) ||
+                            (drill.animationUrl != null && drill.animationUrl!.isNotEmpty)) ...[
                           Container(
                             height: 200,
                             width: double.infinity,
@@ -510,7 +523,7 @@ class SessionTemplateDetailsView extends StatelessWidget {
                               color: Colors.grey[100],
                               borderRadius: BorderRadius.circular(12),
                             ),
-                            child: _buildAnimationDisplay(drill.animationUrl),
+                            child: _buildAnimationDisplay(drill),
                           ),
                           const SizedBox(height: 20),
                         ],
@@ -689,60 +702,33 @@ class SessionTemplateDetailsView extends StatelessWidget {
     );
   }
 
-  Widget _buildAnimationDisplay(String? animationUrl) {
-    if (animationUrl == null || animationUrl.isEmpty) {
-      return const SizedBox.shrink();
+  Widget _buildAnimationDisplay(DrillData drill) {
+    // Priority 1: AI-generated animation (animationJson)
+    if (drill.animationJson != null && drill.animationJson!.isNotEmpty) {
+      try {
+        final animationData = DrillAnimationData.fromJson(jsonDecode(drill.animationJson!));
+        return DrillAnimationPlayer(
+          animationData: animationData,
+          width: double.infinity,
+          height: 200,
+        );
+      } catch (e) {
+        // If parsing fails, fall through to other options
+        debugPrint('Failed to parse animation JSON: $e');
+      }
     }
 
-    // Check if the URL ends with .json (Lottie animation)
-    if (animationUrl.toLowerCase().endsWith('.json')) {
-      return Lottie.network(
-        animationUrl,
-        fit: BoxFit.contain,
-        repeat: true,
-        animate: true,
-        errorBuilder: (context, error, stackTrace) {
-          return Container(
-            color: Colors.grey[200],
-            child: const Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.error_outline, size: 48, color: Colors.grey),
-                  SizedBox(height: 8),
-                  Text('Failed to load animation', style: TextStyle(color: Colors.grey)),
-                ],
-              ),
-            ),
-          );
-        },
-      );
-    }
-    // If it's a video file (mp4)
-    else if (animationUrl.toLowerCase().endsWith('.mp4')) {
-      return Container(
-        color: Colors.grey[200],
-        child: const Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.video_file, size: 64, color: Colors.grey),
-              SizedBox(height: 8),
-              Text('Video playback coming soon', style: TextStyle(color: Colors.grey)),
-            ],
-          ),
-        ),
-      );
-    }
-    // For images (jpg, png, gif)
-    else if (animationUrl.toLowerCase().endsWith('.jpg') ||
-        animationUrl.toLowerCase().endsWith('.png') ||
-        animationUrl.toLowerCase().endsWith('.gif')) {
-      return ClipRRect(
-        borderRadius: BorderRadius.circular(12),
-        child: Image.network(
+    // Priority 2: Manual upload (animationUrl)
+    if (drill.animationUrl != null && drill.animationUrl!.isNotEmpty) {
+      final animationUrl = drill.animationUrl!;
+
+      // Check if the URL ends with .json (Lottie animation)
+      if (animationUrl.toLowerCase().endsWith('.json')) {
+        return Lottie.network(
           animationUrl,
           fit: BoxFit.contain,
+          repeat: true,
+          animate: true,
           errorBuilder: (context, error, stackTrace) {
             return Container(
               color: Colors.grey[200],
@@ -750,32 +736,62 @@ class SessionTemplateDetailsView extends StatelessWidget {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(Icons.broken_image, size: 48, color: Colors.grey),
+                    Icon(Icons.error_outline, size: 48, color: Colors.grey),
                     SizedBox(height: 8),
-                    Text('Failed to load image', style: TextStyle(color: Colors.grey)),
+                    Text('Failed to load animation', style: TextStyle(color: Colors.grey)),
                   ],
                 ),
               ),
             );
           },
-        ),
-      );
-    }
-    // For other cases
-    else {
-      return Container(
-        color: Colors.grey[200],
-        child: const Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.help_outline, size: 48, color: Colors.grey),
-              SizedBox(height: 8),
-              Text('Unsupported format', style: TextStyle(color: Colors.grey)),
-            ],
+        );
+      }
+      // If it's a video file (mp4)
+      else if (animationUrl.toLowerCase().endsWith('.mp4')) {
+        return Container(
+          color: Colors.grey[200],
+          child: const Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.video_file, size: 64, color: Colors.grey),
+                SizedBox(height: 8),
+                Text('Video playback coming soon', style: TextStyle(color: Colors.grey)),
+              ],
+            ),
           ),
-        ),
-      );
+        );
+      }
+      // For images (jpg, png, gif)
+      else if (animationUrl.toLowerCase().endsWith('.jpg') ||
+          animationUrl.toLowerCase().endsWith('.png') ||
+          animationUrl.toLowerCase().endsWith('.gif')) {
+        return ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: Image.network(
+            animationUrl,
+            fit: BoxFit.contain,
+            errorBuilder: (context, error, stackTrace) {
+              return Container(
+                color: Colors.grey[200],
+                child: const Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.broken_image, size: 48, color: Colors.grey),
+                      SizedBox(height: 8),
+                      Text('Failed to load image', style: TextStyle(color: Colors.grey)),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+        );
+      }
     }
+
+    // No animation available
+    return const SizedBox.shrink();
   }
 }

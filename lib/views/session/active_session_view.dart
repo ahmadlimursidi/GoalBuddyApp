@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:lottie/lottie.dart';
+import 'dart:convert';
 import '../../view_models/active_session_view_model.dart';
 import '../../config/theme.dart';
+import '../../widgets/pdf_viewer_widget.dart';
+import '../../widgets/drill_animation_player.dart';
+import '../../models/drill_animation_data.dart';
 
 class ActiveSessionView extends StatefulWidget {
   const ActiveSessionView({super.key});
@@ -149,7 +153,32 @@ class _ActiveSessionViewState extends State<ActiveSessionView> {
                             ],
                           ),
                         ),
-                        // Action Buttons
+                        // Action Buttons - Using a more compact layout
+                        // PDF Button (if available) - Now with green color and no box
+                        if (viewModel.pdfUrl != null && viewModel.pdfUrl!.isNotEmpty)
+                          Tooltip(
+                            message: "View Session Plan PDF",
+                            child: IconButton(
+                              onPressed: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => PdfViewerWidget(
+                                      pdfUrl: viewModel.pdfUrl!,
+                                      fileName: viewModel.pdfFileName ?? 'Session Plan',
+                                    ),
+                                  ),
+                                );
+                              },
+                              icon: Icon(
+                                Icons.picture_as_pdf,
+                                color: AppTheme.pitchGreen,
+                                size: 20,
+                              ),
+                              padding: EdgeInsets.zero,
+                              constraints: BoxConstraints.tightFor(width: 40, height: 40),
+                            ),
+                          ),
                         IconButton(
                           onPressed: () {
                              Navigator.pushNamed(context, '/attendance', arguments: {
@@ -364,8 +393,9 @@ class _ActiveSessionViewState extends State<ActiveSessionView> {
                                 ),
                                 const SizedBox(height: 20),
 
-                                // Tactical Board (Animation)
-                                if (currentDrill.animationUrl != null && currentDrill.animationUrl!.isNotEmpty)
+                                // Tactical Board (Animation) - AI-generated or manual upload
+                                if ((currentDrill.animationJson != null && currentDrill.animationJson!.isNotEmpty) ||
+                                    (currentDrill.animationUrl != null && currentDrill.animationUrl!.isNotEmpty))
                                   Container(
                                     height: 220,
                                     width: double.infinity,
@@ -380,7 +410,7 @@ class _ActiveSessionViewState extends State<ActiveSessionView> {
                                     clipBehavior: Clip.hardEdge,
                                     child: Stack(
                                       children: [
-                                        Center(child: _buildAnimationDisplay(currentDrill.animationUrl)),
+                                        Center(child: _buildAnimationDisplay(currentDrill)),
                                         Positioned(
                                           bottom: 8,
                                           right: 8,
@@ -390,7 +420,16 @@ class _ActiveSessionViewState extends State<ActiveSessionView> {
                                               color: Colors.black54,
                                               borderRadius: BorderRadius.circular(4),
                                             ),
-                                            child: const Text("TACTICAL BOARD", style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                                            child: Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                if (currentDrill.animationJson != null && currentDrill.animationJson!.isNotEmpty)
+                                                  const Icon(Icons.auto_awesome, color: Colors.amber, size: 12),
+                                                if (currentDrill.animationJson != null && currentDrill.animationJson!.isNotEmpty)
+                                                  const SizedBox(width: 4),
+                                                const Text("TACTICAL BOARD", style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                                              ],
+                                            ),
                                           ),
                                         )
                                       ],
@@ -431,7 +470,16 @@ class _ActiveSessionViewState extends State<ActiveSessionView> {
                 right: 16,
                 child: viewModel.isSessionComplete
                     ? _buildFinishButton(context, viewModel)
-                    : _buildMediaControls(context, viewModel),
+                    : viewModel.currentDrillIndex == viewModel.drills.length - 1
+                        ? Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              _buildMediaControls(context, viewModel),
+                              const SizedBox(height: 16),
+                              _buildLastDrillFinishButton(context, viewModel),
+                            ],
+                          )
+                        : _buildMediaControls(context, viewModel),
               ),
             ],
           ),
@@ -537,44 +585,87 @@ class _ActiveSessionViewState extends State<ActiveSessionView> {
     );
   }
 
-  Widget _buildAnimationDisplay(String? animationUrl) {
-    if (animationUrl == null || animationUrl.isEmpty) {
-      return const SizedBox.shrink();
+  Widget _buildLastDrillFinishButton(BuildContext context, ActiveSessionViewModel viewModel) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 15, offset: const Offset(0, 4)),
+        ],
+      ),
+      child: ElevatedButton.icon(
+        onPressed: () => _showFinishSessionDialog(context, viewModel),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: AppTheme.primaryRed,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        ),
+        icon: const Icon(Icons.flag_outlined, color: Colors.white),
+        label: const Text("FINISH SESSION", style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white)),
+      ),
+    );
+  }
+
+  Widget _buildAnimationDisplay(Drill drill) {
+    // Priority 1: AI-generated animation (animationJson)
+    if (drill.animationJson != null && drill.animationJson!.isNotEmpty) {
+      try {
+        final animationData = DrillAnimationData.fromJson(jsonDecode(drill.animationJson!));
+        return DrillAnimationPlayer(
+          animationData: animationData,
+          width: double.infinity,
+          height: 220,
+        );
+      } catch (e) {
+        // If parsing fails, fall through to other options
+        debugPrint('Failed to parse animation JSON: $e');
+      }
     }
 
-    if (animationUrl.toLowerCase().endsWith('.json')) {
-      return Lottie.network(
-        animationUrl,
-        fit: BoxFit.contain,
-        repeat: true,
-        animate: true,
-        errorBuilder: (context, error, stackTrace) => _buildErrorPlaceholder(),
-      );
-    } else if (animationUrl.toLowerCase().endsWith('.mp4')) {
-      // Placeholder for video
-      return Container(
-        color: Colors.grey[100],
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(color: Colors.white, shape: BoxShape.circle, boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10)]),
-              child: const Icon(Icons.play_circle_fill, size: 40, color: AppTheme.primaryRed),
-            ),
-            const SizedBox(height: 12),
-            const Text("Video Playback", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey)),
-          ],
-        ),
-      );
-    } else {
-      // Image fallback
-      return Image.network(
-        animationUrl,
-        fit: BoxFit.contain,
-        errorBuilder: (context, error, stackTrace) => _buildErrorPlaceholder(),
-      );
+    // Priority 2: Manual upload (animationUrl) - Lottie, video, image, GIF
+    if (drill.animationUrl != null && drill.animationUrl!.isNotEmpty) {
+      final url = drill.animationUrl!;
+
+      if (url.toLowerCase().endsWith('.json')) {
+        return Lottie.network(
+          url,
+          fit: BoxFit.contain,
+          repeat: true,
+          animate: true,
+          errorBuilder: (context, error, stackTrace) => _buildErrorPlaceholder(),
+        );
+      } else if (url.toLowerCase().endsWith('.mp4')) {
+        // Placeholder for video
+        return Container(
+          color: Colors.grey[100],
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(color: Colors.white, shape: BoxShape.circle, boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10)]),
+                child: const Icon(Icons.play_circle_fill, size: 40, color: AppTheme.primaryRed),
+              ),
+              const SizedBox(height: 12),
+              const Text("Video Playback", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey)),
+            ],
+          ),
+        );
+      } else {
+        // Image fallback (GIF, PNG, JPG)
+        return Image.network(
+          url,
+          fit: BoxFit.contain,
+          errorBuilder: (context, error, stackTrace) => _buildErrorPlaceholder(),
+        );
+      }
     }
+
+    // No animation available
+    return const SizedBox.shrink();
   }
 
   Widget _buildErrorPlaceholder() {

@@ -14,7 +14,9 @@ class Drill {
   final String progressionEasier;
   final String progressionHarder;
   final String learningGoals;
-  final String? animationUrl; // New field for animation URL
+  final String? animationUrl; // URL to uploaded animation file (Lottie, video, image, GIF)
+  final String? animationJson; // JSON string of AI-generated DrillAnimationData
+  final String? visualType; // "animation", "video", "image", "gif", or null
   final int sortOrder; // For sorting drills in the session
 
   Drill({
@@ -28,6 +30,8 @@ class Drill {
     required this.progressionHarder,
     required this.learningGoals,
     this.animationUrl,
+    this.animationJson,
+    this.visualType,
     required this.sortOrder,
   });
 
@@ -44,6 +48,8 @@ class Drill {
       progressionHarder: data['progressionHarder'] ?? data['progression_harder'] ?? '',
       learningGoals: data['learningGoals'] ?? data['learning_goals'] ?? '',
       animationUrl: data['animationUrl'],
+      animationJson: data['animationJson'],
+      visualType: data['visualType'],
       sortOrder: data['sortOrder'] ?? data['sort_order'] ?? 0,
     );
   }
@@ -56,6 +62,8 @@ class ActiveSessionViewModel extends ChangeNotifier {
   bool _isLoading = true;
   List<Drill> _drills = [];
   int _currentDrillIndex = 0;
+  String? _pdfUrl;        // PDF URL from template
+  String? _pdfFileName;   // PDF filename from template
 
   // Timer State
   Timer? _timer;
@@ -68,6 +76,8 @@ class ActiveSessionViewModel extends ChangeNotifier {
   List<Drill> get drills => _drills;
   int get currentDrillIndex => _currentDrillIndex;
   Drill? get currentDrill => _drills.isNotEmpty ? _drills[_currentDrillIndex] : null;
+  String? get pdfUrl => _pdfUrl;
+  String? get pdfFileName => _pdfFileName;
 
   int get remainingSeconds => _remainingSeconds;
   bool get isPaused => _isPaused;
@@ -109,6 +119,10 @@ class ActiveSessionViewModel extends ChangeNotifier {
         throw Exception("Session not found");
       }
 
+      // Check if PDF URL is directly in the session (copied from template when session was created)
+      _pdfUrl = sessionData['pdfUrl']?.toString();
+      _pdfFileName = sessionData['pdfFileName']?.toString();
+
       // Check if drills are embedded in the session
       if (sessionData['drills'] != null && sessionData['drills'] is List) {
         // Load drills directly from the session
@@ -129,6 +143,8 @@ class ActiveSessionViewModel extends ChangeNotifier {
             progressionHarder: drillData['progression_harder'] ?? '',
             learningGoals: drillData['learning_goals'] ?? '',
             animationUrl: drillData['animationUrl'],
+            animationJson: drillData['animationJson'],
+            visualType: drillData['visualType'],
             sortOrder: index,
           );
         }).toList();
@@ -143,6 +159,10 @@ class ActiveSessionViewModel extends ChangeNotifier {
         if (template == null) {
           throw Exception("Session template not found");
         }
+
+        // Load PDF metadata from template if not already loaded from session
+        _pdfUrl ??= template.pdfUrl;
+        _pdfFileName ??= template.pdfFileName;
 
         _drills = template.drills.asMap().entries.map((entry) {
           int index = entry.key;
@@ -160,6 +180,8 @@ class ActiveSessionViewModel extends ChangeNotifier {
             progressionHarder: drillData.progressionHarder,
             learningGoals: drillData.learningGoals,
             animationUrl: drillData.animationUrl,
+            animationJson: drillData.animationJson,
+            visualType: drillData.visualType,
             sortOrder: index,
           );
         }).toList();

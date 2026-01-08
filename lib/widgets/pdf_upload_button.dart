@@ -46,15 +46,23 @@ class _PdfAutofillButtonState extends State<PdfAutofillButton> {
           Map<String, dynamic> data = jsonDecode(cleanJson);
 
           // Upload PDF to Firebase Storage
+          print('📤 Starting PDF upload to Firebase Storage...');
           String? pdfUrl = await _storageService.uploadPdfFromBytes(
             pdfBytes: pdfBytes,
             fileName: fileName,
             folder: 'pdfs/session_templates',
           );
 
+          if (pdfUrl != null) {
+            print('✅ PDF uploaded successfully! URL: $pdfUrl');
+          } else {
+            print('❌ PDF upload failed - pdfUrl is null');
+          }
+
           // Add PDF metadata to extracted data
           data['pdfUrl'] = pdfUrl;
           data['pdfFileName'] = result.files.first.name;
+          print('📦 Added to data: pdfUrl=${data['pdfUrl']}, pdfFileName=${data['pdfFileName']}');
 
           widget.onDataExtracted(data); // Send data to parent form
           if (mounted) {

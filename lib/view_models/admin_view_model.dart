@@ -227,6 +227,9 @@ class AdminViewModel extends ChangeNotifier {
           'progression_easier': drill.progressionEasier,
           'progression_harder': drill.progressionHarder,
           'learning_goals': drill.learningGoals,
+          'animationUrl': drill.animationUrl,
+          'animationJson': drill.animationJson,
+          'visualType': drill.visualType,
         };
       }).toList();
 

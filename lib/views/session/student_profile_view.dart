@@ -412,20 +412,26 @@ class _StudentProfileViewState extends State<StudentProfileView> {
                         hasMedicalInfo = notes != null && notes.isNotEmpty && notes.toLowerCase() != 'none';
                       }
 
+                      // Check if parent is viewing
+                      final arguments = ModalRoute.of(context)?.settings.arguments;
+                      final args = arguments as Map<String, dynamic>?;
+                      final isParentViewing = args?['isParentViewing'] as bool? ?? false;
+
                       return Row(
                         children: [
-                          Expanded(
-                            child: _buildActionButton(
-                              icon: Icons.call,
-                              label: "Contact Parent",
-                              color: AppTheme.pitchGreen,
-                              onTap: () {
-                                // Call logic
-                              },
+                          if (!isParentViewing)
+                            Expanded(
+                              child: _buildActionButton(
+                                icon: Icons.call,
+                                label: "Contact Parent",
+                                color: AppTheme.pitchGreen,
+                                onTap: () {
+                                  // Call logic
+                                },
+                              ),
                             ),
-                          ),
-                          if (hasMedicalInfo) ...[
-                            const SizedBox(width: 12),
+                          if (!isParentViewing && hasMedicalInfo) const SizedBox(width: 12),
+                          if (hasMedicalInfo)
                             Expanded(
                               child: _buildActionButton(
                                 icon: Icons.medical_services_outlined,
@@ -434,7 +440,6 @@ class _StudentProfileViewState extends State<StudentProfileView> {
                                 onTap: () => _showMedicalDialog(studentData),
                               ),
                             ),
-                          ],
                         ],
                       );
                     },
@@ -633,22 +638,6 @@ class _StudentProfileViewState extends State<StudentProfileView> {
     return months[month - 1];
   }
 
-  String _formatDateFromKey(String dateKey) {
-    try {
-      List<String> parts = dateKey.split('-');
-      if (parts.length == 3) {
-        int year = int.parse(parts[0]);
-        int month = int.parse(parts[1]);
-        int day = int.parse(parts[2]);
-        DateTime date = DateTime(year, month, day);
-        return "${date.day} ${_getMonthName(date.month)}";
-      }
-    } catch (e) {
-      print("Error parsing date key: $e");
-    }
-    return dateKey; 
-  }
-
   Future<List<Widget>> _getAttendanceDots() async {
     final arguments = ModalRoute.of(context)?.settings.arguments;
     final args = arguments as Map<String, dynamic>?;
@@ -662,18 +651,40 @@ class _StudentProfileViewState extends State<StudentProfileView> {
           final attendanceHistory = data?['attendanceHistory'] as Map<String, dynamic>?;
 
           if (attendanceHistory != null && attendanceHistory.isNotEmpty) {
-            var sortedEntries = attendanceHistory.entries.toList()..sort((a, b) => b.key.compareTo(a.key));
+            // Create a list of attendance entries with their session dates
+            List<Map<String, dynamic>> attendanceWithDates = [];
+
+            for (var entry in attendanceHistory.entries) {
+              String sessionId = entry.key;
+              String status = entry.value.toString();
+
+              // Try to fetch the session date from the sessions or pastSessions collection
+              DateTime? sessionDate = await _getSessionDate(sessionId);
+
+              if (sessionDate != null) {
+                attendanceWithDates.add({
+                  'date': sessionDate,
+                  'status': status,
+                  'sessionId': sessionId,
+                });
+              }
+            }
+
+            // Sort by date, most recent first
+            attendanceWithDates.sort((a, b) => (b['date'] as DateTime).compareTo(a['date'] as DateTime));
+
             List<Widget> attendanceDots = [];
             int count = 0;
-            for (var entry in sortedEntries) {
+            for (var entry in attendanceWithDates) {
               if (count >= 5) break;
-              String dateKey = entry.key;
-              String status = entry.value.toString();
-              String displayDate = _formatDateFromKey(dateKey);
+              DateTime date = entry['date'];
+              String status = entry['status'];
+              String displayDate = "${date.day} ${_getMonthName(date.month)}";
               bool present = status.toLowerCase() == 'present' || status.toLowerCase() == 'p';
               attendanceDots.add(_buildAttendanceDot(present, displayDate));
               count++;
             }
+
             while (attendanceDots.length < 5) {
               attendanceDots.add(_buildPlaceholderDot());
             }
@@ -685,6 +696,32 @@ class _StudentProfileViewState extends State<StudentProfileView> {
       }
     }
     return List.generate(5, (index) => _buildPlaceholderDot());
+  }
+
+  // Helper method to get session date from sessionId
+  Future<DateTime?> _getSessionDate(String sessionId) async {
+    try {
+      // Try sessions collection first
+      DocumentSnapshot sessionDoc = await FirebaseFirestore.instance.collection('sessions').doc(sessionId).get();
+      if (sessionDoc.exists) {
+        final data = sessionDoc.data() as Map<String, dynamic>?;
+        if (data != null && data['startTime'] != null) {
+          return (data['startTime'] as Timestamp).toDate();
+        }
+      }
+
+      // If not found, try pastSessions collection
+      DocumentSnapshot pastSessionDoc = await FirebaseFirestore.instance.collection('pastSessions').doc(sessionId).get();
+      if (pastSessionDoc.exists) {
+        final data = pastSessionDoc.data() as Map<String, dynamic>?;
+        if (data != null && data['startTime'] != null) {
+          return (data['startTime'] as Timestamp).toDate();
+        }
+      }
+    } catch (e) {
+      print("Error fetching session date for $sessionId: $e");
+    }
+    return null;
   }
 
   Widget _buildAttendanceDot(bool present, String date) {

@@ -4,10 +4,13 @@ class Drill {
   final String instructions;
   final int durationSeconds;
   final String icon; // Icon name as string
-  final String? animationSource; // Path to Rive file or GIF asset
+  final String? animationSource; // Path to Rive file or GIF asset (deprecated - use animationUrl)
   final List<String>? animationSteps; // List of animation step image paths for step-by-step guide
   final List<String>? stepInstructions; // List of text instructions for each animation step
   final String ageGroup; // Age group for the drill (e.g., Little Kicks, Junior Kickers)
+  final String? animationUrl; // URL to uploaded animation file (Lottie, video, image, GIF)
+  final String? animationJson; // JSON string of AI-generated DrillAnimationData
+  final String? visualType; // "animation", "video", "image", "gif", or null
 
   Drill({
     required this.title,
@@ -19,6 +22,9 @@ class Drill {
     this.animationSteps,
     this.stepInstructions,
     required this.ageGroup,
+    this.animationUrl,
+    this.animationJson,
+    this.visualType,
   });
 
   factory Drill.fromMap(dynamic data) {
@@ -34,6 +40,9 @@ class Drill {
         animationSteps: null,
         stepInstructions: null,
         ageGroup: 'General',
+        animationUrl: null,
+        animationJson: null,
+        visualType: null,
       );
     }
 
@@ -54,6 +63,9 @@ class Drill {
           ?.map((e) => e.toString())
           .toList(),
       ageGroup: mapData['ageGroup'] as String? ?? 'General',
+      animationUrl: mapData['animationUrl'] as String?,
+      animationJson: mapData['animationJson'] as String?,
+      visualType: mapData['visualType'] as String?,
     );
   }
 

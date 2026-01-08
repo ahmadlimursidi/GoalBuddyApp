@@ -606,6 +606,13 @@ class FirestoreService {
     required String badgeFocus,
   }) async {
     try {
+      // Get the template to copy PDF URL and other metadata
+      DocumentSnapshot templateDoc = await _db.collection('session_templates').doc(templateId).get();
+      Map<String, dynamic>? templateData = templateDoc.data() as Map<String, dynamic>?;
+
+      String? pdfUrl = templateData?['pdfUrl'];
+      String? pdfFileName = templateData?['pdfFileName'];
+
       await _db.collection('sessions').add({
         'templateId': templateId,
         'className': className,
@@ -615,6 +622,8 @@ class FirestoreService {
         'coachId': coachId,
         'durationMinutes': durationMinutes,
         'badgeFocus': badgeFocus,
+        'pdfUrl': pdfUrl,        // Copy PDF URL from template
+        'pdfFileName': pdfFileName, // Copy PDF file name from template
         'status': 'Scheduled', // New scheduled classes are always scheduled
         'createdAt': FieldValue.serverTimestamp(),
       });
@@ -638,6 +647,13 @@ class FirestoreService {
     required List<Map<String, dynamic>> drills,
   }) async {
     try {
+      // Get the template to copy PDF URL and other metadata
+      DocumentSnapshot templateDoc = await _db.collection('session_templates').doc(templateId).get();
+      Map<String, dynamic>? templateData = templateDoc.data() as Map<String, dynamic>?;
+
+      String? pdfUrl = templateData?['pdfUrl'];
+      String? pdfFileName = templateData?['pdfFileName'];
+
       DocumentReference docRef = await _db.collection('sessions').add({
         'templateId': templateId,
         'className': className,
@@ -651,6 +667,8 @@ class FirestoreService {
         'badgeFocus': badgeFocus,
         'drillIds': drills.map((drill) => drill['id'] ?? '').toList(),
         'drills': drills,
+        'pdfUrl': pdfUrl,        // Copy PDF URL from template
+        'pdfFileName': pdfFileName, // Copy PDF file name from template
         'status': 'Scheduled',
         'createdAt': FieldValue.serverTimestamp(),
       });
@@ -778,6 +796,87 @@ class FirestoreService {
       print('Session $sessionId marked as Completed');
     } catch (e) {
       print('Error completing session: $e');
+      rethrow;
+    }
+  }
+
+  /// Archive a completed session by moving it to pastSessions collection
+  Future<void> archiveSession(String sessionId) async {
+    try {
+      // Get the session document
+      DocumentSnapshot sessionDoc = await _db.collection('sessions').doc(sessionId).get();
+
+      if (!sessionDoc.exists) {
+        throw Exception('Session not found');
+      }
+
+      Map<String, dynamic> sessionData = sessionDoc.data() as Map<String, dynamic>;
+
+      // Ensure it's completed before archiving
+      if (sessionData['status'] != 'Completed') {
+        throw Exception('Only completed sessions can be archived');
+      }
+
+      // Add to pastSessions collection with the same ID
+      await _db.collection('pastSessions').doc(sessionId).set({
+        ...sessionData,
+        'archivedAt': FieldValue.serverTimestamp(),
+      });
+
+      // Copy student attendance data from sessions/{sessionId}/students to pastSessions/{sessionId}/students
+      QuerySnapshot studentsSnapshot = await _db
+          .collection('sessions')
+          .doc(sessionId)
+          .collection('students')
+          .get();
+
+      if (studentsSnapshot.docs.isNotEmpty) {
+        WriteBatch batch = _db.batch();
+
+        for (QueryDocumentSnapshot studentDoc in studentsSnapshot.docs) {
+          batch.set(
+            _db.collection('pastSessions').doc(sessionId).collection('students').doc(studentDoc.id),
+            studentDoc.data() as Map<String, dynamic>
+          );
+        }
+
+        await batch.commit();
+      }
+
+      // Delete from sessions collection
+      await _db.collection('sessions').doc(sessionId).delete();
+
+      print('Session $sessionId archived successfully with attendance data');
+    } catch (e) {
+      print('Error archiving session: $e');
+      rethrow;
+    }
+  }
+
+  /// Get archived/past sessions
+  Stream<QuerySnapshot> getPastSessions() {
+    return _db
+        .collection('pastSessions')
+        .orderBy('completedAt', descending: true)
+        .snapshots();
+  }
+
+  /// Get archived/past sessions for a specific coach
+  Stream<QuerySnapshot> getPastSessionsForCoach(String coachId) {
+    return _db
+        .collection('pastSessions')
+        .where('coachId', isEqualTo: coachId)
+        .orderBy('archivedAt', descending: true)
+        .snapshots();
+  }
+
+  /// Delete a session permanently
+  Future<void> deleteSession(String sessionId) async {
+    try {
+      await _db.collection('sessions').doc(sessionId).delete();
+      print('Session $sessionId deleted successfully');
+    } catch (e) {
+      print('Error deleting session: $e');
       rethrow;
     }
   }

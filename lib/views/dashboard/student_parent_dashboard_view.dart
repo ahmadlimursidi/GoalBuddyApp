@@ -119,6 +119,36 @@ class _StudentParentDashboardViewState extends State<StudentParentDashboardView>
             return const Center(child: CircularProgressIndicator(color: AppTheme.primaryRed));
           }
 
+          // Check if student data failed to load
+          if (viewModel.studentId == null && !viewModel.isLoading) {
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.error_outline, size: 60, color: Colors.grey[400]),
+                  const SizedBox(height: 16),
+                  const Text(
+                    "No student data found",
+                    style: TextStyle(
+                      fontSize: 18,
+                      color: Colors.grey,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    "Please contact admin to link your account",
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.grey,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
+            );
+          }
+
           return SingleChildScrollView(
             physics: const AlwaysScrollableScrollPhysics(),
             child: Column(
@@ -150,16 +180,7 @@ class _StudentParentDashboardViewState extends State<StudentParentDashboardView>
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        "Welcome Back,",
-                        style: TextStyle(
-                          fontSize: 16,
-                          color: Colors.white.withOpacity(0.9),
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        viewModel.studentName != null ? 'Parent of ${viewModel.studentName}' : 'Parent',
+                        viewModel.studentName != null ? 'Welcome Back, ${viewModel.studentName}!' : 'Welcome Back!',
                         style: const TextStyle(
                           fontSize: 24,
                           fontWeight: FontWeight.bold,
@@ -214,6 +235,7 @@ class _StudentParentDashboardViewState extends State<StudentParentDashboardView>
                                     'isNew': false,
                                     'parentContact': viewModel.parentContact ?? 'N/A',
                                     'medicalNotes': viewModel.medicalNotes ?? 'N/A',
+                                    'isParentViewing': true,
                                   },
                                 );
                               }
@@ -230,11 +252,14 @@ class _StudentParentDashboardViewState extends State<StudentParentDashboardView>
                                       color: AppTheme.primaryRed.withOpacity(0.1),
                                       shape: BoxShape.circle,
                                     ),
-                                    child: const Center(
-                                      child: Icon(
-                                        Icons.child_care,
-                                        color: AppTheme.primaryRed,
-                                        size: 35,
+                                    child: Center(
+                                      child: Text(
+                                        _getInitials(viewModel.studentName ?? "?"),
+                                        style: const TextStyle(
+                                          color: AppTheme.primaryRed,
+                                          fontSize: 24,
+                                          fontWeight: FontWeight.bold,
+                                        ),
                                       ),
                                     ),
                                   ),
@@ -289,7 +314,7 @@ class _StudentParentDashboardViewState extends State<StudentParentDashboardView>
                         ),
                       ),
                       const SizedBox(height: 16),
-                      
+
                       Row(
                         children: [
                           Expanded(
@@ -310,6 +335,69 @@ class _StudentParentDashboardViewState extends State<StudentParentDashboardView>
                             ),
                           ),
                         ],
+                      ),
+                      const SizedBox(height: 16),
+                      // Payment Action Card with status - full width
+                      Consumer<StudentParentViewModel>(
+                        builder: (context, viewModel, child) {
+                          // Only show payment status if studentId is available and view model is ready
+                          if (viewModel.studentId == null || viewModel.isLoading) {
+                            return _buildPaymentCard(
+                              icon: Icons.payment,
+                              label: "Loading Status",
+                              color: Colors.grey,
+                              onTap: () {
+                                // Disable tap until studentId is loaded
+                              },
+                            );
+                          }
+
+                          return FutureBuilder<String>(
+                            future: _getPaymentStatus(viewModel.studentId),
+                            builder: (context, snapshot) {
+                              String status = "Check Payment Status";
+                              Color color = Colors.green;
+                              if (snapshot.hasData) {
+                                String paymentStatus = snapshot.data!;
+                                if (paymentStatus == "paid") {
+                                  status = "Fees Paid";
+                                  color = Colors.green;
+                                } else if (paymentStatus == "pending") {
+                                  status = "Payment Pending";
+                                  color = Colors.orange;
+                                } else {
+                                  status = "Pay Fees";
+                                  color = Colors.red;
+                                }
+                              } else if (snapshot.hasError) {
+                                status = "Error Loading Status";
+                                color = Colors.grey;
+                              } else if (snapshot.connectionState == ConnectionState.waiting) {
+                                status = "Loading Status";
+                                color = Colors.grey;
+                              }
+
+                              return _buildPaymentCard(
+                                icon: Icons.payment,
+                                label: status,
+                                color: color,
+                                onTap: () {
+                                  // Double check if studentId is still valid before opening dialog
+                                  if (viewModel.studentId != null) {
+                                    _showPaymentConfirmationDialog(context, viewModel);
+                                  } else {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text("Student data not loaded yet."),
+                                        backgroundColor: Colors.red,
+                                      ),
+                                    );
+                                  }
+                                },
+                              );
+                            },
+                          );
+                        },
                       ),
                     ],
                   ),
@@ -350,12 +438,42 @@ class _StudentParentDashboardViewState extends State<StudentParentDashboardView>
               ],
             ),
           ),
-          
+
           Expanded(
             child: Consumer<StudentParentViewModel>(
               builder: (context, viewModel, child) {
                 if (viewModel.isLoading) {
                   return const Center(child: CircularProgressIndicator(color: AppTheme.primaryRed));
+                }
+
+                // Check if student data failed to load
+                if (viewModel.studentId == null && !viewModel.isLoading) {
+                  return Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.error_outline, size: 60, color: Colors.grey[400]),
+                        const SizedBox(height: 16),
+                        const Text(
+                          "No student data found",
+                          style: TextStyle(
+                            fontSize: 18,
+                            color: Colors.grey,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        const Text(
+                          "Please contact admin to link your account",
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Colors.grey,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
+                    ),
+                  );
                 }
 
                 return StreamBuilder(
@@ -451,6 +569,36 @@ class _StudentParentDashboardViewState extends State<StudentParentDashboardView>
                     return const Center(child: CircularProgressIndicator(color: AppTheme.primaryRed));
                   }
 
+                  // Check if student data failed to load
+                  if (viewModel.studentId == null && !viewModel.isLoading) {
+                    return Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.error_outline, size: 60, color: Colors.grey[400]),
+                          const SizedBox(height: 16),
+                          const Text(
+                            "No student data found",
+                            style: TextStyle(
+                              fontSize: 18,
+                              color: Colors.grey,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          const Text(
+                            "Please contact admin to link your account",
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Colors.grey,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ],
+                      ),
+                    );
+                  }
+
                   // Stats Row
                   return Column(
                     children: [
@@ -476,7 +624,7 @@ class _StudentParentDashboardViewState extends State<StudentParentDashboardView>
                         ],
                       ),
                       const SizedBox(height: 24),
-                      
+
                       // Badge Grid
                       if (viewModel.studentId != null)
                         BadgeGrid(
@@ -497,8 +645,103 @@ class _StudentParentDashboardViewState extends State<StudentParentDashboardView>
 
   // --- Helper Widgets ---
 
+  // Show payment confirmation dialog
+  void _showPaymentConfirmationDialog(BuildContext context, StudentParentViewModel viewModel) {
+    // Check if studentId is available before proceeding
+    if (viewModel.studentId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Unable to process payment. Student data not loaded yet."),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    final now = DateTime.now();
+    final monthYear = "${_getMonthName(now.month)} ${now.year}";
+
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text("Payment Confirmation"),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text("Have you paid for $monthYear?"),
+              const SizedBox(height: 16),
+              Text(
+                "Please confirm that you have made the payment for this month. "
+                "Your confirmation will be sent to the admin for verification.",
+                style: TextStyle(color: Colors.grey[600]),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text("Cancel"),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                // Record payment intent in Firestore
+                try {
+                  await FirebaseFirestore.instance
+                      .collection('students')
+                      .doc(viewModel.studentId!)
+                      .collection('payments')
+                      .doc(monthYear.replaceAll(' ', '_'))
+                      .set({
+                    'month': monthYear,
+                    'amount': 0, // This would be set by admin
+                    'status': 'pending', // pending, confirmed, rejected
+                    'parentConfirmed': true,
+                    'adminConfirmed': false,
+                    'parentConfirmedAt': FieldValue.serverTimestamp(),
+                    'adminConfirmedAt': null,
+                    'notes': 'Parent confirmed payment for $monthYear',
+                    'studentId': viewModel.studentId,
+                    'studentName': viewModel.studentName,
+                  });
+
+                  Navigator.of(context).pop(); // Close dialog
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text("Payment confirmation sent to admin"),
+                      backgroundColor: AppTheme.pitchGreen,
+                    ),
+                  );
+                } catch (e) {
+                  Navigator.of(context).pop(); // Close dialog
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text("Error confirming payment: $e"),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                }
+              },
+              child: const Text("Yes, I Paid"),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  String _getMonthName(int month) {
+    const months = [
+      'January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December'
+    ];
+    return months[month - 1];
+  }
+
   Widget _buildActionCard({required IconData icon, required String label, required Color color, required VoidCallback onTap}) {
     return Container(
+      height: 120, // Fixed height for consistency
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
@@ -516,7 +759,7 @@ class _StudentParentDashboardViewState extends State<StudentParentDashboardView>
           borderRadius: BorderRadius.circular(16),
           onTap: onTap,
           child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
+            padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
@@ -528,17 +771,81 @@ class _StudentParentDashboardViewState extends State<StudentParentDashboardView>
                   ),
                   child: Icon(icon, color: color, size: 28),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 8),
                 Text(
                   label,
                   textAlign: TextAlign.center,
                   style: const TextStyle(
-                    fontSize: 14,
+                    fontSize: 12, // Slightly smaller font for consistency
                     fontWeight: FontWeight.w600,
                     color: AppTheme.darkText,
                     height: 1.2,
                   ),
                 ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPaymentCard({required IconData icon, required String label, required Color color, required VoidCallback onTap}) {
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(20),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: color.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Icon(icon, color: color, size: 32),
+                ),
+                const SizedBox(width: 20),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        label,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: AppTheme.darkText,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        "Tap to confirm payment",
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey[600],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Icon(Icons.chevron_right, color: Colors.grey[400]),
               ],
             ),
           ),
@@ -696,8 +1003,53 @@ class _StudentParentDashboardViewState extends State<StudentParentDashboardView>
     );
   }
 
+  String _getInitials(String name) {
+    if (name.isEmpty) return '?';
+    final parts = name.trim().split(' ');
+    if (parts.length == 1) {
+      return parts[0][0].toUpperCase();
+    }
+    return '${parts[0][0]}${parts[parts.length - 1][0]}'.toUpperCase();
+  }
+
   String _getMonthAbbreviation(int month) {
     const months = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     return months[month];
+  }
+
+  // Get current payment status for the student
+  Future<String> _getPaymentStatus(String? studentId) async {
+    if (studentId == null) return "unpaid";
+
+    try {
+      final now = DateTime.now();
+      final monthYear = "${_getMonthName(now.month)} ${now.year}";
+
+      final doc = await FirebaseFirestore.instance
+          .collection('students')
+          .doc(studentId)
+          .collection('payments')
+          .doc(monthYear.replaceAll(' ', '_'))
+          .get();
+
+      if (doc.exists) {
+        final data = doc.data() as Map<String, dynamic>?;
+        if (data != null) {
+          final status = data['status'] as String?;
+          // Return the status: 'pending', 'confirmed'/'paid', or 'rejected'
+          if (status != null) {
+            if (status == 'confirmed' || status == 'paid') {
+              return 'paid';
+            } else if (status == 'pending') {
+              return 'pending';
+            }
+          }
+        }
+      }
+      return 'unpaid'; // Default to unpaid if no payment record exists
+    } catch (e) {
+      print("Error checking payment status: $e");
+      return 'unpaid'; // Default to unpaid if there's an error
+    }
   }
 }
