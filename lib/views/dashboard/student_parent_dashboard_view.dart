@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../config/theme.dart';
 import '../../view_models/auth_view_model.dart';
 import '../../view_models/student_parent_view_model.dart';
+import '../../widgets/badge_grid.dart'; // Ensure this is imported for the progress tab
 
 class StudentParentDashboardView extends StatefulWidget {
   const StudentParentDashboardView({super.key});
@@ -29,53 +30,82 @@ class _StudentParentDashboardViewState extends State<StudentParentDashboardView>
     final authViewModel = Provider.of<AuthViewModel>(context);
     final studentParentViewModel = Provider.of<StudentParentViewModel>(context);
 
+    // Build the body based on current index
+    Widget currentBody;
+    switch (_currentIndex) {
+      case 0:
+        currentBody = _buildHomeContent(studentParentViewModel);
+        break;
+      case 1:
+        currentBody = _buildScheduleContent(studentParentViewModel);
+        break;
+      case 2:
+        currentBody = _buildProgressContent(studentParentViewModel);
+        break;
+      default:
+        currentBody = _buildHomeContent(studentParentViewModel);
+    }
+
     return Scaffold(
+      backgroundColor: const Color(0xFFF5F7FA), // Light grey background
       appBar: AppBar(
         title: const Text("Parent Dashboard"),
         backgroundColor: AppTheme.primaryRed,
         foregroundColor: Colors.white,
+        elevation: 0,
+        centerTitle: true,
         actions: [
           IconButton(
-            icon: const Icon(Icons.logout),
-            onPressed: () {
-              authViewModel.logout();
-              Navigator.pushNamedAndRemoveUntil(context, '/', (route) => false);
+            icon: const Icon(Icons.logout, color: Colors.white),
+            onPressed: () async {
+              await authViewModel.logout();
+              if (context.mounted) {
+                Navigator.pushNamedAndRemoveUntil(context, '/', (route) => false);
+              }
             },
           ),
         ],
       ),
-      body: IndexedStack(
-        index: _currentIndex,
-        children: [
-          _buildHomeContent(studentParentViewModel),
-          _buildScheduleContent(studentParentViewModel),
-          _buildProgressContent(studentParentViewModel),
-        ],
-      ),
-      bottomNavigationBar: BottomNavigationBar(
-        type: BottomNavigationBarType.fixed,
-        currentIndex: _currentIndex,
-        selectedItemColor: AppTheme.primaryRed,
-        unselectedItemColor: Colors.grey,
-        onTap: (index) {
-          setState(() {
-            _currentIndex = index;
-          });
-        },
-        items: const [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.home),
-            label: "Home",
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.schedule),
-            label: "Schedule",
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.bar_chart),
-            label: "Progress",
-          ),
-        ],
+      body: currentBody,
+      bottomNavigationBar: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 10,
+              offset: const Offset(0, -5),
+            ),
+          ],
+        ),
+        child: BottomNavigationBar(
+          backgroundColor: Colors.white,
+          type: BottomNavigationBarType.fixed,
+          currentIndex: _currentIndex,
+          selectedItemColor: AppTheme.primaryRed,
+          unselectedItemColor: Colors.grey,
+          selectedLabelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+          elevation: 0,
+          onTap: (index) {
+            setState(() {
+              _currentIndex = index;
+            });
+          },
+          items: const [
+            BottomNavigationBarItem(
+              icon: Icon(Icons.home_rounded),
+              label: "Home",
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.calendar_today_rounded),
+              label: "Schedule",
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.emoji_events_rounded),
+              label: "Progress",
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -83,216 +113,211 @@ class _StudentParentDashboardViewState extends State<StudentParentDashboardView>
   Widget _buildHomeContent(StudentParentViewModel viewModel) {
     return RefreshIndicator(
       onRefresh: () => viewModel.refreshData(),
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Consumer<StudentParentViewModel>(
-          builder: (context, viewModel, child) {
-            if (viewModel.isLoading) {
-              return const Center(child: CircularProgressIndicator());
-            }
+      child: Consumer<StudentParentViewModel>(
+        builder: (context, viewModel, child) {
+          if (viewModel.isLoading) {
+            return const Center(child: CircularProgressIndicator(color: AppTheme.primaryRed));
+          }
 
-            return SingleChildScrollView(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Welcome Section
-                  Card(
-                    elevation: 4,
-                    child: Padding(
-                      padding: const EdgeInsets.all(16.0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            "Welcome, ${viewModel.studentName != null ? 'Parent of ${viewModel.studentName}' : 'Parent'}!",
-                            style: const TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            "Here's what's happening with your child",
-                            style: const TextStyle(
-                              fontSize: 16,
-                              color: Colors.grey,
-                            ),
-                          ),
-                        ],
-                      ),
+          return SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // 1. Header Section
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.fromLTRB(24, 10, 24, 30),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [AppTheme.primaryRed, Color(0xFFC41A1F)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
                     ),
+                    borderRadius: const BorderRadius.only(
+                      bottomLeft: Radius.circular(24),
+                      bottomRight: Radius.circular(24),
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.1),
+                        blurRadius: 10,
+                        offset: const Offset(0, 5),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 24),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        "Welcome Back,",
+                        style: TextStyle(
+                          fontSize: 16,
+                          color: Colors.white.withOpacity(0.9),
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        viewModel.studentName != null ? 'Parent of ${viewModel.studentName}' : 'Parent',
+                        style: const TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
 
-                  // Child Profile Card
-                  Card(
-                    elevation: 2,
-                    child: Padding(
-                      padding: const EdgeInsets.all(16.0),
-                      child: Row(
-                        children: [
-                          Container(
-                            width: 60,
-                            height: 60,
-                            decoration: BoxDecoration(
-                              color: AppTheme.primaryRed,
-                              borderRadius: BorderRadius.circular(30),
+                Padding(
+                  padding: const EdgeInsets.all(20.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        "Your Child",
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: AppTheme.darkText,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+
+                      // Child Profile Card
+                      Container(
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(20),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.05),
+                              blurRadius: 10,
+                              offset: const Offset(0, 4),
                             ),
-                            child: const Icon(
-                              Icons.child_care,
-                              color: Colors.white,
-                              size: 30,
+                          ],
+                        ),
+                        child: Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(20),
+                            onTap: () {
+                              if (viewModel.studentId != null) {
+                                Navigator.pushNamed(
+                                  context,
+                                  '/student_profile',
+                                  arguments: {
+                                    'studentId': viewModel.studentId,
+                                    'studentName': viewModel.studentName ?? 'Student',
+                                    'isPresent': true,
+                                    'isNew': false,
+                                    'parentContact': viewModel.parentContact ?? 'N/A',
+                                    'medicalNotes': viewModel.medicalNotes ?? 'N/A',
+                                  },
+                                );
+                              }
+                            },
+                            child: Padding(
+                              padding: const EdgeInsets.all(20.0),
+                              child: Row(
+                                children: [
+                                  // Avatar
+                                  Container(
+                                    width: 70,
+                                    height: 70,
+                                    decoration: BoxDecoration(
+                                      color: AppTheme.primaryRed.withOpacity(0.1),
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: const Center(
+                                      child: Icon(
+                                        Icons.child_care,
+                                        color: AppTheme.primaryRed,
+                                        size: 35,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 20),
+                                  // Details
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          viewModel.studentName ?? "Child Name",
+                                          style: const TextStyle(
+                                            fontSize: 20,
+                                            fontWeight: FontWeight.bold,
+                                            color: AppTheme.darkText,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                          decoration: BoxDecoration(
+                                            color: AppTheme.pitchGreen.withOpacity(0.1),
+                                            borderRadius: BorderRadius.circular(8),
+                                          ),
+                                          child: Text(
+                                            viewModel.childAgeGroup ?? "Age Group",
+                                            style: const TextStyle(
+                                              color: AppTheme.pitchGreen,
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  const Icon(Icons.chevron_right, color: Colors.grey),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+
+                      const SizedBox(height: 24),
+                      const Text(
+                        "Quick Actions",
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: AppTheme.darkText,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _buildActionCard(
+                              icon: Icons.calendar_month,
+                              label: "View\nSchedule",
+                              color: Colors.blue,
+                              onTap: () => setState(() => _currentIndex = 1),
                             ),
                           ),
                           const SizedBox(width: 16),
                           Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  viewModel.studentName ?? "Child Name",
-                                  style: const TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                                Text(
-                                  viewModel.childAgeGroup ?? "Age Group",
-                                  style: const TextStyle(
-                                    color: Colors.grey,
-                                    fontSize: 14,
-                                  ),
-                                ),
-                              ],
+                            child: _buildActionCard(
+                              icon: Icons.emoji_events,
+                              label: "Check\nProgress",
+                              color: Colors.orange,
+                              onTap: () => setState(() => _currentIndex = 2),
                             ),
                           ),
                         ],
                       ),
-                    ),
+                    ],
                   ),
-                  const SizedBox(height: 24),
-
-                  // Combined Attendance History and Report
-                  Card(
-                    elevation: 2,
-                    child: Padding(
-                      padding: const EdgeInsets.all(16.0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            "Attendance",
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceAround,
-                            children: [
-                              _buildAttendanceSummaryCard(
-                                "Present",
-                                viewModel.presentDaysCount.toString(),
-                                Colors.green,
-                              ),
-                              _buildAttendanceSummaryCard(
-                                "Absent",
-                                viewModel.absentDaysCount.toString(),
-                                Colors.red,
-                              ),
-                              _buildAttendanceSummaryCard(
-                                "Total",
-                                viewModel.totalDaysCount.toString(),
-                                Colors.blue,
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 16),
-                          const Text(
-                            "Recent Attendance",
-                            style: TextStyle(
-                              fontWeight: FontWeight.w500,
-                              fontSize: 16,
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          _buildRecentAttendance(viewModel.recentAttendance),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-
-                  // Payment Due Card
-                  Card(
-                    elevation: 2,
-                    child: Padding(
-                      padding: const EdgeInsets.all(16.0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            "Payment Status",
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-                          Row(
-                            children: [
-                              Container(
-                                width: 12,
-                                height: 12,
-                                decoration: BoxDecoration(
-                                  color: viewModel.isPaymentDue ? Colors.red : Colors.green,
-                                  shape: BoxShape.circle,
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Text(
-                                viewModel.isPaymentDue ? "Payment Due" : "Payment Up to Date",
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w500,
-                                  color: viewModel.isPaymentDue ? Colors.red : Colors.green,
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            viewModel.isPaymentDue 
-                                ? "Please settle the outstanding fees for ${DateTime.now().month}/${DateTime.now().year}" 
-                                : "Thank you for keeping your payments up to date!",
-                            style: TextStyle(
-                              color: viewModel.isPaymentDue ? Colors.red : Colors.green,
-                              fontSize: 14,
-                            ),
-                          ),
-                          if (viewModel.isPaymentDue) ...[
-                            const SizedBox(height: 16),
-                            ElevatedButton(
-                              onPressed: () {
-                                // Handle payment
-                              },
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.red,
-                                foregroundColor: Colors.white,
-                              ),
-                              child: const Text("Make Payment"),
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            );
-          },
-        ),
+                ),
+              ],
+            ),
+          );
+        },
       ),
     );
   }
@@ -300,251 +325,85 @@ class _StudentParentDashboardViewState extends State<StudentParentDashboardView>
   Widget _buildScheduleContent(StudentParentViewModel viewModel) {
     return RefreshIndicator(
       onRefresh: () => viewModel.refreshData(),
-      child: Consumer<StudentParentViewModel>(
-        builder: (context, viewModel, child) {
-          if (viewModel.isLoading) {
-            return const Center(child: CircularProgressIndicator());
-          }
-
-          return StreamBuilder(
-            stream: viewModel.childClassesStream,
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return const Center(child: CircularProgressIndicator());
-              }
-
-              if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                return const Center(
-                  child: Text(
-                    "No upcoming classes found.\nCheck back later!",
-                    textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 16),
-                  ),
-                );
-              }
-
-              final classes = snapshot.data!.docs;
-
-              return ListView.builder(
-                padding: const EdgeInsets.all(16),
-                itemCount: classes.length,
-                itemBuilder: (context, index) {
-                  final classData = classes[index].data() as Map<String, dynamic>;
-                  
-                  // Format the date and time
-                  DateTime classDateTime = (classData['startTime'] as Timestamp).toDate();
-                  String formattedDate = "${classDateTime.day}/${classDateTime.month}/${classDateTime.year}";
-                  String formattedTime = "${classDateTime.hour.toString().padLeft(2, '0')}:${classDateTime.minute.toString().padLeft(2, '0')}";
-
-                  return Card(
-                    margin: const EdgeInsets.only(bottom: 16),
-                    elevation: 2,
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  classData['className'] ?? 'Class',
-                                  style: const TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                decoration: BoxDecoration(
-                                  color: AppTheme.primaryRed.withOpacity(0.1),
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: Text(
-                                  classData['ageGroup'] ?? 'Age Group',
-                                  style: TextStyle(
-                                    color: AppTheme.primaryRed,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          Row(
-                            children: [
-                              const Icon(Icons.calendar_today, size: 16, color: Colors.grey),
-                              const SizedBox(width: 4),
-                              Text(
-                                formattedDate,
-                                style: const TextStyle(color: Colors.grey),
-                              ),
-                              const SizedBox(width: 16),
-                              const Icon(Icons.access_time, size: 16, color: Colors.grey),
-                              const SizedBox(width: 4),
-                              Text(
-                                formattedTime,
-                                style: const TextStyle(color: Colors.grey),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          Row(
-                            children: [
-                              const Icon(Icons.location_on, size: 16, color: Colors.grey),
-                              const SizedBox(width: 4),
-                              Text(
-                                classData['venue'] ?? 'Venue',
-                                style: const TextStyle(color: Colors.grey),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                  );
-                },
-              );
-            },
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _buildProgressContent(StudentParentViewModel viewModel) {
-    return RefreshIndicator(
-      onRefresh: () => viewModel.refreshData(),
-      child: Consumer<StudentParentViewModel>(
-        builder: (context, viewModel, child) {
-          if (viewModel.isLoading) {
-            return const Center(child: CircularProgressIndicator());
-          }
-
-          final badges = viewModel.childBadges;
-          
-          return Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Child Info Header
-                Card(
-                  elevation: 4,
-                  child: Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 60,
-                          height: 60,
-                          decoration: BoxDecoration(
-                            color: AppTheme.primaryRed,
-                            borderRadius: BorderRadius.circular(30),
-                          ),
-                          child: const Icon(
-                            Icons.child_care,
-                            color: Colors.white,
-                            size: 30,
-                          ),
-                        ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                viewModel.studentName ?? "Child Name",
-                                style: const TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              Text(
-                                viewModel.childAgeGroup ?? "Age Group",
-                                style: const TextStyle(
-                                  color: Colors.grey,
-                                  fontSize: 14,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 24),
-                
-                // Progress Summary
-                const Text(
-                  "Badge Progress",
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                
-                // Badges Grid
-                Expanded(
-                  child: badges.isEmpty
-                      ? const Center(
-                          child: Text(
-                            "No badges earned yet.\nKeep attending classes!",
-                            textAlign: TextAlign.center,
-                            style: TextStyle(fontSize: 16, color: Colors.grey),
-                          ),
-                        )
-                      : GridView.builder(
-                          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: 2,
-                            crossAxisSpacing: 16,
-                            mainAxisSpacing: 16,
-                            childAspectRatio: 1.2,
-                          ),
-                          itemCount: badges.length,
-                          itemBuilder: (context, index) {
-                            final badge = badges[index];
-                            return _buildBadgeCard(badge);
-                          },
-                        ),
+      child: Column(
+        children: [
+          // Simple Header for Tab
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.fromLTRB(24, 10, 24, 20),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.05),
+                  blurRadius: 5,
+                  offset: const Offset(0, 2),
                 ),
               ],
             ),
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _buildAttendanceSummaryCard(String title, String count, Color color) {
-    return Container(
-      width: 90,
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color.withOpacity(0.3)),
-      ),
-      child: Column(
-        children: [
-          Text(
-            count,
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              color: color,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text("Upcoming Sessions", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: AppTheme.darkText)),
+                const SizedBox(height: 4),
+                Text("Your child's next football classes", style: TextStyle(color: Colors.grey[600], fontSize: 14)),
+              ],
             ),
           ),
-          const SizedBox(height: 4),
-          Text(
-            title,
-            style: TextStyle(
-              fontSize: 12,
-              color: color,
+          
+          Expanded(
+            child: Consumer<StudentParentViewModel>(
+              builder: (context, viewModel, child) {
+                if (viewModel.isLoading) {
+                  return const Center(child: CircularProgressIndicator(color: AppTheme.primaryRed));
+                }
+
+                return StreamBuilder(
+                  stream: viewModel.childClassesStream,
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return const Center(child: CircularProgressIndicator(color: AppTheme.primaryRed));
+                    }
+
+                    if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                      return Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.event_busy, size: 60, color: Colors.grey[300]),
+                            const SizedBox(height: 16),
+                            Text(
+                              "No upcoming classes found",
+                              style: TextStyle(color: Colors.grey[500], fontSize: 16),
+                            ),
+                          ],
+                        ),
+                      );
+                    }
+
+                    final classes = snapshot.data!.docs;
+                    // Sort classes by startTime (newest first)
+                    final sortedClasses = classes.toList()..sort((a, b) {
+                      final aTime = (a.data() as Map<String, dynamic>)['startTime'] as Timestamp?;
+                      final bTime = (b.data() as Map<String, dynamic>)['startTime'] as Timestamp?;
+                      if (aTime == null || bTime == null) return 0;
+                      return aTime.toDate().compareTo(bTime.toDate()); // Ascending for schedule
+                    });
+
+                    return ListView.builder(
+                      padding: const EdgeInsets.all(20),
+                      itemCount: sortedClasses.length,
+                      itemBuilder: (context, index) {
+                        final classData = sortedClasses[index].data() as Map<String, dynamic>;
+                        final sessionId = sortedClasses[index].id;
+                        final startTime = (classData['startTime'] as Timestamp).toDate();
+
+                        return _buildScheduleCard(context, classData, startTime, sessionId);
+                      },
+                    );
+                  },
+                );
+              },
             ),
           ),
         ],
@@ -552,101 +411,82 @@ class _StudentParentDashboardViewState extends State<StudentParentDashboardView>
     );
   }
 
-  Widget _buildRecentAttendance(List<Map<String, dynamic>> recentAttendance) {
-    if (recentAttendance.isEmpty) {
-      return const Text("No recent attendance records");
-    }
-
-    return SizedBox(
-      height: 80,
-      child: ListView.builder(
-        scrollDirection: Axis.horizontal,
-        itemCount: recentAttendance.length,
-        itemBuilder: (context, index) {
-          final attendance = recentAttendance[index];
-          bool isPresent = attendance['status'] == 'Present';
-          String date = attendance['date'] ?? 'Date';
-          
-          return Container(
-            width: 60,
-            margin: const EdgeInsets.only(right: 8),
-            decoration: BoxDecoration(
-              color: isPresent ? Colors.green.withOpacity(0.1) : Colors.red.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(
-                color: isPresent ? Colors.green : Colors.red,
-                width: 1,
-              ),
-            ),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(
-                  isPresent ? Icons.check : Icons.close,
-                  color: isPresent ? Colors.green : Colors.red,
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  date,
-                  style: TextStyle(
-                    fontSize: 10,
-                    color: isPresent ? Colors.green : Colors.red,
-                  ),
-                ),
-              ],
-            ),
-          );
-        },
-      ),
-    );
-  }
-  
-  Widget _buildBadgeCard(Map<String, dynamic> badge) {
-    String badgeName = badge['name'] ?? 'Badge';
-    String badgeType = badge['type'] ?? 'Unknown'; // Could be 'Red', 'Yellow', 'Green', 'Purple'
-    
-    Color badgeColor = _getBadgeColor(badgeType);
-    
-    return Card(
-      elevation: 2,
-      child: Padding(
-        padding: const EdgeInsets.all(12.0),
+  Widget _buildProgressContent(StudentParentViewModel viewModel) {
+    return RefreshIndicator(
+      onRefresh: () => viewModel.refreshData(),
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Header
             Container(
-              width: 50,
-              height: 50,
+              width: double.infinity,
+              padding: const EdgeInsets.fromLTRB(24, 10, 24, 20),
               decoration: BoxDecoration(
-                color: badgeColor.withOpacity(0.2),
-                shape: BoxShape.circle,
-                border: Border.all(
-                  color: badgeColor,
-                  width: 2,
-                ),
+                color: Colors.white,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.05),
+                    blurRadius: 5,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
               ),
-              child: Icon(
-                _getBadgeIcon(badgeType),
-                color: badgeColor,
-                size: 28,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              badgeName,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                fontWeight: FontWeight.w500,
-                fontSize: 14,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text("Achievements", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: AppTheme.darkText)),
+                  const SizedBox(height: 4),
+                  Text("Track your child's badges and skills", style: TextStyle(color: Colors.grey[600], fontSize: 14)),
+                ],
               ),
             ),
-            const SizedBox(height: 4),
-            Text(
-              badgeType,
-              style: TextStyle(
-                color: badgeColor,
-                fontWeight: FontWeight.w600,
-                fontSize: 12,
+
+            Padding(
+              padding: const EdgeInsets.all(20),
+              child: Consumer<StudentParentViewModel>(
+                builder: (context, viewModel, child) {
+                  if (viewModel.isLoading) {
+                    return const Center(child: CircularProgressIndicator(color: AppTheme.primaryRed));
+                  }
+
+                  // Stats Row
+                  return Column(
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _buildStatContainer(
+                              "Badges Earned",
+                              "${viewModel.childBadges.length}",
+                              Icons.emoji_events,
+                              Colors.amber,
+                            ),
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: _buildStatContainer(
+                              "Attendance",
+                              "${viewModel.attendanceRate.toStringAsFixed(0)}%",
+                              Icons.check_circle,
+                              AppTheme.pitchGreen,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 24),
+                      
+                      // Badge Grid
+                      if (viewModel.studentId != null)
+                        BadgeGrid(
+                          ageGroup: viewModel.childAgeGroup ?? 'Junior Kickers',
+                          earnedBadgeIds: viewModel.childBadges.map((b) => b['id'] as String).toList(),
+                          currentBadgeId: null, // Optional: highlight next badge
+                        ),
+                    ],
+                  );
+                },
               ),
             ),
           ],
@@ -654,34 +494,210 @@ class _StudentParentDashboardViewState extends State<StudentParentDashboardView>
       ),
     );
   }
-  
-  Color _getBadgeColor(String badgeType) {
-    switch (badgeType.toLowerCase()) {
-      case 'red':
-        return Colors.red;
-      case 'yellow':
-        return Colors.yellow[700]!;
-      case 'green':
-        return AppTheme.pitchGreen;
-      case 'purple':
-        return Colors.purple;
-      default:
-        return Colors.grey;
-    }
+
+  // --- Helper Widgets ---
+
+  Widget _buildActionCard({required IconData icon, required String label, required Color color, required VoidCallback onTap}) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.03),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: color.withOpacity(0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(icon, color: color, size: 28),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  label,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: AppTheme.darkText,
+                    height: 1.2,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
-  
-  IconData _getBadgeIcon(String badgeType) {
-    switch (badgeType.toLowerCase()) {
-      case 'red':
-        return Icons.star_border;
-      case 'yellow':
-        return Icons.star_half;
-      case 'green':
-        return Icons.star;
-      case 'purple':
-        return Icons.star_purple500_sharp;
-      default:
-        return Icons.help_outline;
-    }
+
+  Widget _buildScheduleCard(BuildContext context, Map<String, dynamic> classData, DateTime startTime, String sessionId) {
+    String formattedDate = "${startTime.day}/${startTime.month}/${startTime.year}";
+    String formattedTime = "${startTime.hour.toString().padLeft(2, '0')}:${startTime.minute.toString().padLeft(2, '0')}";
+    
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: () {
+            Navigator.pushNamed(
+              context,
+              '/class_details',
+              arguments: {
+                'sessionId': sessionId,
+                'className': classData['className'],
+              },
+            );
+          },
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: [
+                // Date Box
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: AppTheme.primaryRed.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Column(
+                    children: [
+                      Text(
+                        "${startTime.day}",
+                        style: const TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: AppTheme.primaryRed,
+                        ),
+                      ),
+                      Text(
+                        _getMonthAbbreviation(startTime.month),
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: AppTheme.primaryRed,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 16),
+                
+                // Details
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        classData['className'] ?? 'Class',
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: AppTheme.darkText,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          Icon(Icons.access_time, size: 14, color: Colors.grey[600]),
+                          const SizedBox(width: 4),
+                          Text(formattedTime, style: TextStyle(fontSize: 13, color: Colors.grey[600])),
+                          const SizedBox(width: 12),
+                          Icon(Icons.location_on, size: 14, color: Colors.grey[600]),
+                          const SizedBox(width: 4),
+                          Expanded(
+                            child: Text(
+                              classData['venue'] ?? 'Venue',
+                              style: TextStyle(fontSize: 13, color: Colors.grey[600]),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                const Icon(Icons.chevron_right, color: Colors.grey),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStatContainer(String label, String value, IconData icon, Color color) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.03),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          Icon(icon, color: color, size: 28),
+          const SizedBox(height: 8),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+              color: color,
+            ),
+          ),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              color: Colors.grey[600],
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _getMonthAbbreviation(int month) {
+    const months = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return months[month];
   }
 }

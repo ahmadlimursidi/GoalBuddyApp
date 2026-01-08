@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../models/session_template.dart';
@@ -271,6 +272,7 @@ class FirestoreService {
     required String parentPhone,
     required DateTime dateOfBirth,
     required String medicalNotes,
+    String? password, // Optional password for parent account
   }) async {
     try {
       // Calculate age group based on date of birth
@@ -311,7 +313,7 @@ class FirestoreService {
       String studentId = studentRef.id;
 
       // Create parent account if it doesn't exist
-      await _createParentAccount(parentEmail, studentId, name);
+      await _createParentAccount(parentEmail, studentId, name, password);
 
       return true;
     } catch (e) {
@@ -321,7 +323,7 @@ class FirestoreService {
   }
 
   /// Create parent account if it doesn't exist
-  Future<void> _createParentAccount(String parentEmail, String studentId, String studentName) async {
+  Future<void> _createParentAccount(String parentEmail, String studentId, String studentName, [String? password]) async {
     try {
       // Check if a user with this email already exists in the users collection
       QuerySnapshot querySnapshot = await _db.collection('users')
@@ -330,17 +332,33 @@ class FirestoreService {
           .get();
 
       if (querySnapshot.docs.isEmpty) {
-        // Create a temporary document ID for the parent account
-        String parentId = _db.collection('users').doc().id;
+        String? parentId;
 
-        // Create a placeholder parent account
-        await _db.collection('users').doc(parentId).set({
-          'email': parentEmail,
-          'role': 'student_parent',
-          'linkedStudentId': studentId,
-          'linkedStudentName': studentName,
-          'createdAt': FieldValue.serverTimestamp(),
-        });
+        // Create a Firebase Auth account for the parent (with a default or provided password)
+        try {
+          // If no password is provided, generate a secure random password
+          String actualPassword = password ?? _generateRandomPassword();
+
+          UserCredential userCredential = await _auth.createUserWithEmailAndPassword(
+            email: parentEmail,
+            password: actualPassword,
+          );
+          parentId = userCredential.user!.uid;
+
+          // Create the corresponding Firestore user document with the same ID as the auth user
+          await _db.collection('users').doc(parentId).set({
+            'email': parentEmail,
+            'role': 'student_parent',
+            'linkedStudentId': studentId,
+            'linkedStudentName': studentName,
+            'createdAt': FieldValue.serverTimestamp(),
+          });
+        } on FirebaseAuthException catch (e) {
+          print("Error creating parent auth account: ${e.code} - ${e.message}");
+          // If auth creation fails, we can't create a proper parent account
+          // The parent won't be able to sign in without an auth account
+          throw e; // Re-throw to indicate failure
+        }
       } else {
         // Update existing parent account with new student info
         String existingUserId = querySnapshot.docs.first.id;
@@ -354,6 +372,30 @@ class FirestoreService {
       print("Error creating parent account: $e");
       // Continue without throwing - parent account is optional for now
     }
+  }
+
+  /// Generate a random password for parent accounts
+  String _generateRandomPassword() {
+    const String chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#\$%&*';
+    final Random random = Random();
+    String password = '';
+
+    // Ensure at least one character from each category
+    password += 'abcdefghijklmnopqrstuvwxyz'[random.nextInt(26)];
+    password += 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'[random.nextInt(26)];
+    password += '0123456789'[random.nextInt(10)];
+    password += '!@#\$%&*'[random.nextInt(7)];
+
+    // Add more characters to reach desired length
+    int length = 8 + random.nextInt(5);
+    for (int i = password.length; i < length; i++) {
+      password += chars[random.nextInt(chars.length)];
+    }
+
+    // Shuffle the password characters
+    List<String> passwordList = password.split('');
+    passwordList.shuffle();
+    return passwordList.join();
   }
 
   /// Get all students for admin view
@@ -498,6 +540,8 @@ class FirestoreService {
     required String badgeFocus,
     required List<Map<String, dynamic>> drills,
     required String createdBy,
+    String? pdfUrl,
+    String? pdfFileName,
   }) async {
     try {
       await _db.collection('session_templates').add({
@@ -507,6 +551,8 @@ class FirestoreService {
         'drills': drills,
         'createdAt': FieldValue.serverTimestamp(),
         'createdBy': createdBy,
+        'pdfUrl': pdfUrl,
+        'pdfFileName': pdfFileName,
       });
     } catch (e) {
       print("Error creating session template: $e");
@@ -560,7 +606,7 @@ class FirestoreService {
     required String badgeFocus,
   }) async {
     try {
-      await _db.collection('scheduled_classes').add({
+      await _db.collection('sessions').add({
         'templateId': templateId,
         'className': className,
         'venue': venue,
@@ -578,10 +624,84 @@ class FirestoreService {
     }
   }
 
+  /// Creates a scheduled class using a template with drills included
+  Future<String> createScheduledClassWithDrills({
+    required String templateId,
+    required String className,
+    required String venue,
+    required DateTime dateTime,
+    required String ageGroup,
+    required String leadCoachId,
+    String? assistantCoachId,
+    required int durationMinutes,
+    required String badgeFocus,
+    required List<Map<String, dynamic>> drills,
+  }) async {
+    try {
+      DocumentReference docRef = await _db.collection('sessions').add({
+        'templateId': templateId,
+        'className': className,
+        'venue': venue,
+        'startTime': Timestamp.fromDate(dateTime),
+        'ageGroup': ageGroup,
+        'leadCoachId': leadCoachId,
+        'assistantCoachId': assistantCoachId,
+        'coachId': leadCoachId, // Keep for backward compatibility
+        'durationMinutes': durationMinutes,
+        'badgeFocus': badgeFocus,
+        'drillIds': drills.map((drill) => drill['id'] ?? '').toList(),
+        'drills': drills,
+        'status': 'Scheduled',
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+      return docRef.id;
+    } catch (e) {
+      print("Error creating scheduled class with drills: $e");
+      rethrow;
+    }
+  }
+
+  /// Auto-assign all students with matching age group to a class
+  Future<void> autoAssignStudentsToClass({
+    required String sessionId,
+    required String ageGroup,
+  }) async {
+    try {
+      print("DEBUG: Auto-assigning students with age group '$ageGroup' to session '$sessionId'");
+
+      QuerySnapshot studentsQuery = await _db
+          .collection('students')
+          .where('ageGroup', isEqualTo: ageGroup)
+          .get();
+
+      print("DEBUG: Found ${studentsQuery.docs.length} students with age group '$ageGroup'");
+
+      WriteBatch batch = _db.batch();
+      int updateCount = 0;
+
+      for (var studentDoc in studentsQuery.docs) {
+        batch.update(studentDoc.reference, {
+          'assignedClassId': sessionId,
+          'lastUpdated': FieldValue.serverTimestamp(),
+        });
+        updateCount++;
+        print("DEBUG: Queued update for student: ${studentDoc.id} (${(studentDoc.data() as Map)['name']})");
+      }
+
+      if (updateCount > 0) {
+        await batch.commit();
+        print("DEBUG: Successfully assigned $updateCount students to session $sessionId");
+      }
+    } catch (e) {
+      print("Error auto-assigning students to class: $e");
+      rethrow;
+    }
+  }
+
   /// Gets all scheduled classes
   Stream<QuerySnapshot> getScheduledClasses() {
     return _db
-        .collection('scheduled_classes')
+        .collection('sessions')
         .orderBy('startTime', descending: true)
         .snapshots();
   }
@@ -589,7 +709,7 @@ class FirestoreService {
   /// Gets scheduled classes for a specific coach
   Stream<QuerySnapshot> getScheduledClassesForCoach(String coachId) {
     return _db
-        .collection('scheduled_classes')
+        .collection('sessions')
         .where('coachId', isEqualTo: coachId)
         .orderBy('startTime', descending: true)
         .snapshots();
@@ -597,7 +717,15 @@ class FirestoreService {
 
   /// Gets a scheduled class by ID
   Future<DocumentSnapshot> getScheduledClass(String sessionId) async {
-    return await _db.collection('scheduled_classes').doc(sessionId).get();
+    return await _db.collection('sessions').doc(sessionId).get();
+  }
+
+  /// Gets ALL scheduled classes (for admin view)
+  Stream<QuerySnapshot> getAllScheduledClasses() {
+    return _db
+        .collection('sessions')
+        .orderBy('startTime', descending: false)
+        .snapshots();
   }
 
   // 🔐 USER ROLES & PERMISSIONS
@@ -624,5 +752,33 @@ class FirestoreService {
       'role': role,
       'lastUpdated': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true)); // Merge so we don't wipe other data
+  }
+
+  /// Get session details by ID
+  Future<DocumentSnapshot> getSession(String sessionId) async {
+    return await _db.collection('sessions').doc(sessionId).get();
+  }
+
+  /// Get a specific coach by ID
+  Future<DocumentSnapshot> getCoachById(String? coachId) async {
+    if (coachId == null) {
+      throw Exception('Coach ID is null');
+    }
+    return await _db.collection('users').doc(coachId).get();
+  }
+
+  /// Complete a session by marking it as Completed
+  Future<void> completeSession(String sessionId) async {
+    try {
+      // Update in sessions collection
+      await _db.collection('sessions').doc(sessionId).update({
+        'status': 'Completed',
+        'completedAt': FieldValue.serverTimestamp(),
+      });
+      print('Session $sessionId marked as Completed');
+    } catch (e) {
+      print('Error completing session: $e');
+      rethrow;
+    }
   }
 }

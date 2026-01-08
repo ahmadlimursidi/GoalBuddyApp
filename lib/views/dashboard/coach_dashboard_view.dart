@@ -1,13 +1,29 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:goalbuddy/utils/database_seeder.dart'; // Import the Seeder
+import 'package:intl/intl.dart';
 import '../../config/theme.dart';
 import '../../view_models/dashboard_view_model.dart';
 import '../../view_models/auth_view_model.dart';
+import '../resources/drill_library_view.dart';
 
-class CoachDashboardView extends StatelessWidget {
+class CoachDashboardView extends StatefulWidget {
   const CoachDashboardView({super.key});
+
+  @override
+  State<CoachDashboardView> createState() => _CoachDashboardViewState();
+}
+
+class _CoachDashboardViewState extends State<CoachDashboardView> {
+  @override
+  void initState() {
+    super.initState();
+    // Refresh dashboard data when the view is first loaded
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final viewModel = Provider.of<DashboardViewModel>(context, listen: false);
+      viewModel.refreshDashboard();
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -15,469 +31,493 @@ class CoachDashboardView extends StatelessWidget {
     final viewModel = Provider.of<DashboardViewModel>(context);
     final authViewModel = Provider.of<AuthViewModel>(context);
 
-    // DEBUG: Confirm this widget is rebuilding
-    debugPrint("Building CoachDashboardView...");
-
     return Scaffold(
-      appBar: AppBar(
-        title: const Text("My Schedule"),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.logout),
-            onPressed: () {
-              authViewModel.logout();
-              Navigator.pushNamedAndRemoveUntil(context, '/', (route) => false);
-            },
-          ),
-          const CircleAvatar(
-            backgroundColor: AppTheme.primaryRed,
-            child: Text("C", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-          ),
-        ],
-      ),
+      backgroundColor: const Color(0xFFF5F7FA), // Light grey background
+      body: viewModel.sessionsStream == null
+        ? const Center(child: CircularProgressIndicator(color: AppTheme.primaryRed))
+        : StreamBuilder<QuerySnapshot>(
+            stream: viewModel.sessionsStream,
+            builder: (context, snapshot) {
 
-      // --- THE BIG SEED DB BUTTON ---
-      floatingActionButton: FloatingActionButton.extended(
-        backgroundColor: Colors.orange,
-        onPressed: () {
-          // Trigger the Database Seeder
-          DatabaseSeeder().seedData(context);
-        },
-        label: const Text("Seed DB"),
-        icon: const Icon(Icons.cloud_upload),
-      ),
-      // ---------------------------------
+              if (snapshot.hasError) {
+                return Center(child: Text("Error: ${snapshot.error}"));
+              }
 
-      body: StreamBuilder<QuerySnapshot>(
-        stream: viewModel.sessionsStream,
-        builder: (context, snapshot) {
-          if (snapshot.hasError) {
-            return Center(child: Text("Error: ${snapshot.error}"));
-          }
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator(color: AppTheme.primaryRed));
+              }
 
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
+              final docs = snapshot.data?.docs ?? [];
+              final classCount = docs.length;
 
-          if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-            return const Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.calendar_today_outlined, size: 60, color: Colors.grey),
-                  SizedBox(height: 16),
-                  Text("No classes found for today."),
-                  SizedBox(height: 8),
-                  Text("Click the orange button to generate test data!", style: TextStyle(color: Colors.grey)),
-                ],
-              ),
-            );
-          }
-
-          // We have data!
-          final docs = snapshot.data!.docs;
-
-          // Find the "next" class (closest upcoming)
-          final now = Timestamp.now();
-          var nextClassDoc = docs.first;
-          for (var doc in docs) {
-            final data = doc.data() as Map<String, dynamic>;
-            final startTime = data['startTime'] as Timestamp?;
-            final status = data['status'] as String?;
-
-            // Consider "Live Now" or upcoming classes with start time after now
-            if (status == 'Live Now') {
-              nextClassDoc = doc;
-              break;
-            }
-            if (startTime != null && startTime.compareTo(now) > 0) {
-              nextClassDoc = doc;
-              break;
-            }
-          }
-
-          final nextClassData = nextClassDoc.data() as Map<String, dynamic>;
-          final nextClassId = nextClassDoc.id;
-
-          // Format time for display
-          String timeString = "00:00";
-          if (nextClassData['startTime'] != null) {
-            final dt = (nextClassData['startTime'] as Timestamp).toDate();
-            timeString = "${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}";
-          }
-
-          // We have data!
-          return SingleChildScrollView(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(24),
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [AppTheme.primaryRed, Color(0xFFC41A1F)],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                    borderRadius: BorderRadius.circular(16),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.1),
-                        blurRadius: 8,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: Column(
+          return CustomScrollView(
+            slivers: [
+              // 1. Modern Sliver App Bar Header
+              SliverAppBar(
+                expandedHeight: 200.0,
+                floating: false,
+                pinned: true,
+                backgroundColor: AppTheme.primaryRed,
+                elevation: 0,
+                flexibleSpace: FlexibleSpaceBar(
+                  background: Stack(
                     children: [
-                      Icon(Icons.sports_soccer, size: 60, color: Colors.white),
-                      const SizedBox(height: 16),
-                      const Text(
-                        "Welcome back, Coach!",
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
+                      // Gradient Background
+                      Container(
+                        decoration: const BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [AppTheme.primaryRed, Color(0xFFC41A1F)],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
                         ),
                       ),
-                      const SizedBox(height: 8),
-                      Text(
-                        "You have ${docs.length} classes today.",
-                        style: TextStyle(
-                          color: Colors.white70,
-                          fontSize: 16,
+                      // Decorative Circles
+                      Positioned(
+                        right: -30,
+                        top: -30,
+                        child: CircleAvatar(
+                          radius: 60,
+                          backgroundColor: Colors.white.withOpacity(0.1),
                         ),
                       ),
-                    ],
-                  ),
-                ),
-
-                const SizedBox(height: 24),
-
-                // Next Class Card (Prominent) - Moved to be first
-                Text(
-                  "Next Class",
-                  style: Theme.of(context).textTheme.titleLarge,
-                ),
-                const SizedBox(height: 12),
-
-                Card(
-                  elevation: 4,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                    side: BorderSide(
-                      color: AppTheme.pitchGreen.withOpacity(0.3),
-                      width: 2,
-                    ),
-                  ),
-                  child: Container(
-                    padding: const EdgeInsets.all(20),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(
-                        color: AppTheme.pitchGreen.withOpacity(0.3),
+                      Positioned(
+                        left: -20,
+                        bottom: -40,
+                        child: CircleAvatar(
+                          radius: 80,
+                          backgroundColor: Colors.white.withOpacity(0.1),
+                        ),
                       ),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      // Content inside Header
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(24, 80, 24, 0),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    nextClassData['className'] ?? 'Unknown Class',
-                                    style: const TextStyle(
-                                      fontSize: 20,
-                                      fontWeight: FontWeight.bold,
+                            FutureBuilder<String>(
+                              future: authViewModel.getCurrentUserName(),
+                              builder: (context, nameSnapshot) {
+                                final coachName = nameSnapshot.data ?? 'Coach';
+                                final initial = coachName.isNotEmpty ? coachName[0].toUpperCase() : 'C';
+
+                                return Row(
+                                  children: [
+                                    CircleAvatar(
+                                      radius: 24,
+                                      backgroundColor: Colors.white,
+                                      child: Text(initial, style: const TextStyle(color: AppTheme.primaryRed, fontWeight: FontWeight.bold, fontSize: 20)),
                                     ),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    "${nextClassData['venue'] ?? 'Unknown Venue'} • ${nextClassData['ageGroup'] ?? 'All Ages'}",
-                                    style: const TextStyle(color: Colors.grey),
-                                  ),
-                                ],
-                              ),
+                                    const SizedBox(width: 16),
+                                    Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        const Text(
+                                          "Welcome back,",
+                                          style: TextStyle(color: Colors.white70, fontSize: 14),
+                                        ),
+                                        Text(
+                                          "Coach $coachName",
+                                          style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                );
+                              },
                             ),
+                            const Spacer(),
                             Container(
-                              padding: const EdgeInsets.all(12),
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                               decoration: BoxDecoration(
-                                color: AppTheme.pitchGreen.withOpacity(0.1),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Column(
-                                children: [
-                                  Text(
-                                    timeString,
-                                    style: TextStyle(
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.bold,
-                                      color: AppTheme.pitchGreen,
-                                    ),
-                                  ),
-                                  Text(
-                                    ((nextClassData['startTime'] as Timestamp?)?.toDate().hour ?? 0) < 12 ? 'AM' : 'PM',
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      color: AppTheme.pitchGreen,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 16),
-                        // Status Indicator
-                        Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                              decoration: BoxDecoration(
-                                color: AppTheme.pitchGreen.withOpacity(0.1),
+                                color: Colors.white.withOpacity(0.2),
                                 borderRadius: BorderRadius.circular(20),
                               ),
                               child: Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  Icon(Icons.radio_button_checked, size: 16, color: AppTheme.pitchGreen),
-                                  const SizedBox(width: 4),
+                                  const Icon(Icons.calendar_today, color: Colors.white, size: 16),
+                                  const SizedBox(width: 8),
                                   Text(
-                                    "UPCOMING",
-                                    style: TextStyle(
-                                      color: AppTheme.pitchGreen,
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 12,
-                                    ),
+                                    "$classCount Upcoming ${classCount == 1 ? 'Class' : 'Classes'}",
+                                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
                                   ),
                                 ],
                               ),
                             ),
+                            const SizedBox(height: 24),
                           ],
                         ),
-                        const SizedBox(height: 20),
-                        // Big "Start Session" Button
-                        SizedBox(
-                          width: double.infinity,
-                          child: ElevatedButton.icon(
-                            onPressed: () {
-                              // Navigate to Active Session View with sessionId
-                              Navigator.pushNamed(context, '/active_session', arguments: {
-                                'sessionId': nextClassId,
-                              });
-                            },
-                            icon: const Icon(Icons.play_arrow, color: Colors.white),
-                            label: const Text(
-                              "Start Session",
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: AppTheme.pitchGreen,
-                              padding: const EdgeInsets.symmetric(vertical: 16),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
+                      ),
+                    ],
+                  ),
+                ),
+                actions: [
+                  IconButton(
+                    icon: const Icon(Icons.logout, color: Colors.white),
+                    onPressed: () async {
+                      await authViewModel.logout();
+                      // After logout, clear dashboard data
+                      viewModel.refreshDashboard();
+                      if (context.mounted) {
+                        Navigator.pushNamedAndRemoveUntil(context, '/', (route) => false);
+                      }
+                    },
+                  ),
+                ],
+              ),
+
+              // 2. Body Content
+              if (docs.isEmpty)
+                SliverPadding(
+                  padding: const EdgeInsets.all(20),
+                  sliver: SliverToBoxAdapter(child: _buildEmptyState(context)),
+                ),
+
+              if (docs.isNotEmpty) ...[
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
+                  sliver: const SliverToBoxAdapter(
+                    child: Text(
+                      "Your Schedule",
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppTheme.darkText),
+                    ),
+                  ),
+                ),
+                SliverPadding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  sliver: SliverList(
+                    delegate: SliverChildBuilderDelegate(
+                      (context, index) => _buildClassCard(context, docs[index]),
+                      childCount: docs.length,
                     ),
                   ),
                 ),
 
-                const SizedBox(height: 24),
-
-                // Quick Stats - Now comes after Next Class
-                Text(
-                  "Quick Stats",
-                  style: Theme.of(context).textTheme.titleLarge,
-                ),
-                const SizedBox(height: 12),
-
-                // Stats Grid (2x2) - Dynamic height to prevent overflow
-                GridView.count(
-                  crossAxisCount: 2,
-                  crossAxisSpacing: 16,
-                  mainAxisSpacing: 16,
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(), // Important: Disable scrolling for GridView inside SingleChildScrollView
-                  childAspectRatio: 1.6, // Make them wider and shorter to prevent overflow
-                  children: [
-                    _buildStatCard(
-                      context,
-                      "Classes Today",
-                      docs.length.toString(),
-                      Icons.event,
-                      Colors.blue
+                SliverPadding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  sliver: const SliverToBoxAdapter(
+                    child: Padding(
+                      padding: EdgeInsets.only(top: 24, bottom: 16),
+                      child: Text(
+                        "Quick Actions",
+                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppTheme.darkText),
+                      ),
                     ),
-                    _buildStatCard(
-                      context,
-                      "Active Students",
-                      (docs.length * 8).toString(), // Estimate ~8 per class
-                      Icons.people,
-                      Colors.green
-                    ),
-                    _buildStatCard(
-                      context,
-                      "Avg Attendance",
-                      "78%", // Placeholder
-                      Icons.bar_chart,
-                      Colors.orange
-                    ),
-                    _buildStatCard(
-                      context,
-                      "Completion Rate",
-                      "92%", // Placeholder
-                      Icons.check_circle,
-                      Colors.purple
-                    ),
-                  ],
-                ),
-
-                const SizedBox(height: 24),
-
-                // Quick Actions
-                Text(
-                  "Quick Actions",
-                  style: const TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    color: AppTheme.darkText,
                   ),
                 ),
-                const SizedBox(height: 16),
 
-                _buildActionRow(
-                  icon: Icons.checklist,
-                  title: "Take Attendance",
-                  onTap: () {
-                    // Navigate to attendance if we have sessions
-                    if (docs.isNotEmpty) {
-                      Navigator.pushNamed(context, '/attendance', arguments: {
-                        'sessionId': docs.first.id,
-                      });
-                    }
-                  },
+                // 3. Grid for Quick Actions
+                SliverPadding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  sliver: SliverGrid.count(
+                    crossAxisCount: 2,
+                    mainAxisSpacing: 16,
+                    crossAxisSpacing: 16,
+                    childAspectRatio: 1.3,
+                    children: [
+                      _buildActionCard(
+                        icon: Icons.sports_soccer,
+                        title: "Browse\nDrills",
+                        color: Colors.blueAccent,
+                        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const DrillLibraryView())),
+                      ),
+                      _buildActionCard(
+                        icon: Icons.checklist,
+                        title: "Student\nList",
+                        color: Colors.orange,
+                        onTap: () => Navigator.pushNamed(context, '/student_list'),
+                      ),
+                      _buildActionCard(
+                        icon: Icons.school,
+                        title: "Coach\nResources",
+                        color: Colors.purple,
+                        onTap: () => Navigator.pushNamed(context, '/coach_resources'),
+                      ),
+                      _buildActionCard(
+                        icon: Icons.settings,
+                        title: "My\nSettings",
+                        color: Colors.grey,
+                        onTap: () {}, // Placeholder
+                      ),
+                    ],
+                  ),
                 ),
-                _buildActionRow(
-                  icon: Icons.sports_soccer,
-                  title: "Browse Drills",
-                  onTap: () {
-                    Navigator.pushNamed(context, '/drills_list');
-                  },
-                ),
+
+                // Bottom padding
+                const SliverToBoxAdapter(child: SizedBox(height: 40)),
               ],
-            ),
+            ],
           );
         },
       ),
 
-      bottomNavigationBar: BottomNavigationBar(
-        selectedItemColor: AppTheme.primaryRed,
-        unselectedItemColor: Colors.grey,
-        currentIndex: 0,
-        type: BottomNavigationBarType.fixed,
-        onTap: (index) {
-          if (index == 1) Navigator.pushNamed(context, '/drills_list');
-          if (index == 2) Navigator.pushNamed(context, '/student_list');
-          if (index == 3) Navigator.pushNamed(context, '/coach_resources');
-        },
-        items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.calendar_today), label: "Schedule"),
-          BottomNavigationBarItem(icon: Icon(Icons.sports_soccer), label: "Drills"),
-          BottomNavigationBarItem(icon: Icon(Icons.checklist), label: "Student List"),
-          BottomNavigationBarItem(icon: Icon(Icons.school), label: "Resources"),
+      bottomNavigationBar: Container(
+        decoration: BoxDecoration(
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 10,
+              offset: const Offset(0, -5),
+            ),
+          ],
+        ),
+        child: BottomNavigationBar(
+          backgroundColor: Colors.white,
+          selectedItemColor: AppTheme.primaryRed,
+          unselectedItemColor: Colors.grey[400],
+          currentIndex: 0,
+          type: BottomNavigationBarType.fixed,
+          showUnselectedLabels: true,
+          elevation: 0,
+          selectedLabelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+          unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w500, fontSize: 11),
+          onTap: (index) {
+            if (index == 1) Navigator.push(context, MaterialPageRoute(builder: (context) => const DrillLibraryView()));
+            if (index == 2) Navigator.pushNamed(context, '/student_list');
+            if (index == 3) Navigator.pushNamed(context, '/coach_resources');
+          },
+          items: const [
+            BottomNavigationBarItem(icon: Icon(Icons.calendar_month_rounded), label: "Schedule"),
+            BottomNavigationBarItem(icon: Icon(Icons.sports_soccer_rounded), label: "Drills"),
+            BottomNavigationBarItem(icon: Icon(Icons.people_alt_rounded), label: "Students"),
+            BottomNavigationBarItem(icon: Icon(Icons.school_rounded), label: "Resources"),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEmptyState(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10, offset: const Offset(0, 4))],
+      ),
+      child: Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: Colors.grey[50],
+              shape: BoxShape.circle,
+            ),
+            child: Icon(Icons.event_busy_rounded, size: 60, color: Colors.grey[400]),
+          ),
+          const SizedBox(height: 20),
+          Text(
+            "No classes assigned",
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.grey[800]),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            "Looks like you have a free day!\nContact admin if this is a mistake.",
+            textAlign: TextAlign.center,
+            style: TextStyle(color: Colors.grey[500], height: 1.5),
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildActionRow({required IconData icon, required String title, required VoidCallback onTap}) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
+  Widget _buildClassCard(BuildContext context, DocumentSnapshot doc) {
+    final data = doc.data() as Map<String, dynamic>;
+    final startTime = data['startTime'] as Timestamp?;
+    final now = Timestamp.now();
+    
+    // Logic for Highlighting "Next" Class
+    bool isNext = false;
+    bool isPast = false;
+    
+    if (startTime != null) {
+      final classDate = startTime.toDate();
+      final nowDate = now.toDate();
+      isPast = classDate.isBefore(nowDate);
+      // Simple logic: if not past, consider it upcoming/next
+      if (!isPast) isNext = true; 
+    }
+
+    String timeString = "00:00";
+    String dateString = "Unknown";
+    String dayString = "";
+
+    if (startTime != null) {
+      final dt = startTime.toDate();
+      timeString = "${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}";
+      dateString = DateFormat('MMM d').format(dt);
+      dayString = DateFormat('EEE').format(dt).toUpperCase();
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
-      child: ListTile(
-        leading: Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: AppTheme.primaryRed.withOpacity(0.1),
-            borderRadius: BorderRadius.circular(12),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(20),
+          onTap: () => Navigator.pushNamed(context, '/active_session', arguments: {'sessionId': doc.id}),
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Date Column
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: isNext ? AppTheme.pitchGreen.withOpacity(0.1) : Colors.grey[100],
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Column(
+                        children: [
+                          Text(dayString, style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: isNext ? AppTheme.pitchGreen : Colors.grey)),
+                          const SizedBox(height: 4),
+                          Text(dateString, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    // Content Column
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          if (isNext)
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                              margin: const EdgeInsets.only(bottom: 6),
+                              decoration: BoxDecoration(
+                                color: AppTheme.pitchGreen,
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: const Text("UPCOMING", style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                            ),
+                          Text(
+                            data['className'] ?? 'Unknown Class',
+                            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppTheme.darkText),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 4),
+                          Row(
+                            children: [
+                              Icon(Icons.group_outlined, size: 14, color: Colors.grey[600]),
+                              const SizedBox(width: 4),
+                              Text(data['ageGroup'] ?? 'All Ages', style: TextStyle(color: Colors.grey[600], fontSize: 14)),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                const Divider(height: 1),
+                const SizedBox(height: 16),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    _buildInfoChip(Icons.access_time_filled_rounded, timeString, isNext ? AppTheme.primaryRed : Colors.grey),
+                    _buildInfoChip(Icons.location_on_rounded, data['venue'] ?? 'Unknown', Colors.grey),
+                    
+                    // Action Arrow
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: isNext ? AppTheme.primaryRed : Colors.grey[100],
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        isNext ? Icons.play_arrow_rounded : Icons.chevron_right_rounded,
+                        color: isNext ? Colors.white : Colors.grey,
+                        size: 20,
+                      ),
+                    )
+                  ],
+                )
+              ],
+            ),
           ),
-          child: Icon(icon, color: AppTheme.primaryRed),
         ),
-        title: Text(
-          title,
-          style: const TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-        trailing: const Icon(Icons.chevron_right, color: Colors.grey),
-        onTap: onTap,
       ),
     );
   }
 
-  // Helper method to build compact stat cards - Fixed overflow issue
-  Widget _buildStatCard(BuildContext context, String title, String value, IconData icon, Color color) {
-    return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Container(
-        padding: const EdgeInsets.all(10), // Reduced padding
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.grey.withOpacity(0.1),
-              blurRadius: 6,
-              offset: const Offset(0, 2),
-            ),
-          ],
+  Widget _buildInfoChip(IconData icon, String text, Color color) {
+    return Row(
+      children: [
+        Icon(icon, size: 16, color: color),
+        const SizedBox(width: 6),
+        Text(
+          text,
+          style: TextStyle(
+            color: Colors.grey[800],
+            fontWeight: FontWeight.w600,
+            fontSize: 13,
+          ),
         ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(6), // Reduced padding
-              decoration: BoxDecoration(
-                color: color.withOpacity(0.1),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(icon, size: 20, color: color), // Smaller icon
+      ],
+    );
+  }
+
+  Widget _buildActionCard({required IconData icon, required String title, required Color color, required VoidCallback onTap}) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.03),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(20),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: color.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(icon, color: color, size: 24),
+                ),
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: AppTheme.darkText,
+                    height: 1.2,
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(height: 6), // Reduced space
-            Text(
-              value,
-              style: TextStyle(
-                fontSize: 16, // Smaller font size
-                fontWeight: FontWeight.bold,
-                color: color,
-              ),
-            ),
-            const SizedBox(height: 2), // Reduced space
-            Text(
-              title,
-              style: const TextStyle(
-                fontSize: 10, // Smaller title font
-                color: Colors.grey,
-              ),
-              textAlign: TextAlign.center,
-            ),
-          ],
+          ),
         ),
       ),
     );

@@ -8,6 +8,8 @@ class SessionTemplate {
   List<DrillData> drills;
   DateTime createdAt;
   String? createdBy;
+  String? pdfUrl;        // URL to the original PDF in Firebase Storage
+  String? pdfFileName;   // Original filename of the PDF
 
   SessionTemplate({
     required this.id,
@@ -17,6 +19,8 @@ class SessionTemplate {
     required this.drills,
     required this.createdAt,
     this.createdBy,
+    this.pdfUrl,
+    this.pdfFileName,
   });
 
   // Factory constructor to create a blank session template
@@ -29,13 +33,15 @@ class SessionTemplate {
       drills: [],
       createdAt: DateTime.now(),
       createdBy: null,
+      pdfUrl: null,
+      pdfFileName: null,
     );
   }
 
   // Convert from Firestore document
   factory SessionTemplate.fromFirestore(Map<String, dynamic> data, String id) {
     List<DrillData> drills = [];
-    
+
     if (data['drills'] != null && data['drills'] is List) {
       for (var drill in data['drills']) {
         if (drill is Map<String, dynamic>) {
@@ -61,6 +67,8 @@ class SessionTemplate {
       drills: drills,
       createdAt: (data['createdAt'] as dynamic)?.toDate() ?? DateTime.now(),
       createdBy: data['createdBy']?.toString(),
+      pdfUrl: data['pdfUrl']?.toString(),
+      pdfFileName: data['pdfFileName']?.toString(),
     );
   }
 
@@ -84,6 +92,8 @@ class SessionTemplate {
       }).toList(),
       'createdAt': createdAt,
       'createdBy': createdBy,
+      'pdfUrl': pdfUrl,
+      'pdfFileName': pdfFileName,
     };
   }
 }

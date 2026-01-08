@@ -13,21 +13,29 @@ class AttendanceView extends StatefulWidget {
 
 class _AttendanceViewState extends State<AttendanceView> {
   String? _sessionId;
+  bool _isInit = false;
 
   @override
-  void initState() {
-    super.initState();
-    // Load students for the current session after the widget is built
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+
+    if (!_isInit) {
+      // Get session ID from route arguments
       final arguments = ModalRoute.of(context)?.settings.arguments;
       if (arguments != null && arguments is Map && arguments.containsKey('sessionId')) {
         _sessionId = arguments['sessionId'] as String?;
+        debugPrint("AttendanceView received sessionId: '$_sessionId'");
+
         if (_sessionId != null) {
-          final attendanceViewModel = Provider.of<AttendanceViewModel>(context, listen: false);
-          attendanceViewModel.loadStudents(_sessionId!);
+          // Load students for the session
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            final attendanceViewModel = Provider.of<AttendanceViewModel>(context, listen: false);
+            attendanceViewModel.loadStudents(_sessionId!);
+          });
         }
       }
-    });
+      _isInit = true;
+    }
   }
 
   @override
@@ -62,7 +70,21 @@ class _AttendanceViewState extends State<AttendanceView> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Class Register"),
+        title: Consumer<AttendanceViewModel>(
+          builder: (context, viewModel, child) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text("Class Register"),
+                if (viewModel.sessionAgeGroup != null && viewModel.sessionAgeGroup!.isNotEmpty)
+                  Text(
+                    viewModel.sessionAgeGroup!,
+                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.normal),
+                  ),
+              ],
+            );
+          },
+        ),
         actions: [
           TextButton(
             onPressed: () {
@@ -105,6 +127,49 @@ class _AttendanceViewState extends State<AttendanceView> {
 
           return Column(
             children: [
+              // Age Group Banner
+              if (viewModel.sessionAgeGroup != null && viewModel.sessionAgeGroup!.isNotEmpty)
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: AppTheme.primaryRed.withOpacity(0.1),
+                    border: Border(
+                      bottom: BorderSide(color: AppTheme.primaryRed.withOpacity(0.3)),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.people, color: AppTheme.primaryRed, size: 20),
+                      const SizedBox(width: 8),
+                      Text(
+                        "Session: ${viewModel.sessionAgeGroup}",
+                        style: TextStyle(
+                          color: AppTheme.primaryRed,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                        ),
+                      ),
+                      const Spacer(),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: AppTheme.pitchGreen,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          "${viewModel.totalStudents} eligible",
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
               // Class Summary Header
               _buildSummaryCard(viewModel),
               const SizedBox(height: 24),

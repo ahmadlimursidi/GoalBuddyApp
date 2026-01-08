@@ -16,6 +16,24 @@ class AuthViewModel extends ChangeNotifier {
   // Getter to access current user
   User? get currentUser => _authService.currentUser;
 
+  // Get current user's name from Firestore
+  Future<String> getCurrentUserName() async {
+    final user = currentUser;
+    if (user == null) return 'Coach';
+
+    try {
+      final doc = await _firestoreService.getCoachById(user.uid);
+      if (doc.exists && doc.data() != null) {
+        final data = doc.data() as Map<String, dynamic>;
+        return data['name'] ?? 'Coach';
+      }
+      return 'Coach';
+    } catch (e) {
+      print("Error getting user name: $e");
+      return 'Coach';
+    }
+  }
+
   // Login Logic - NOW RETURNS THE ROLE (String?)
   Future<String?> login(String email, String password) async {
     _setLoading(true);

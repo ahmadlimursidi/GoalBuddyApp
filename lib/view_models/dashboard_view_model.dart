@@ -23,4 +23,13 @@ class DashboardViewModel extends ChangeNotifier {
       notifyListeners();
     }
   }
+
+  void refreshDashboard() {
+    String? userId = _authService.currentUser?.uid;
+    if (userId != null) {
+      // Refresh sessions assigned to THIS coach
+      _sessionsStream = _firestoreService.getCoachSessions(userId);
+      notifyListeners();
+    }
+  }
 }

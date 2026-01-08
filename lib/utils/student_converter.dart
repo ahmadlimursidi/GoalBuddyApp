@@ -11,6 +11,7 @@ class StudentConverter {
       isNew: isNew,
       parentContact: student.parentEmail, // Use parentEmail instead of parentContact
       medicalNotes: student.medicalNotes,
+      ageGroup: student.ageGroup,
     );
   }
 
@@ -20,7 +21,7 @@ class StudentConverter {
       id: attendance.id,
       name: attendance.name,
       dateOfBirth: null, // Default to null since StudentAttendance doesn't have dateOfBirth
-      ageGroup: 'Unknown', // Default to Unknown since StudentAttendance doesn't have ageGroup
+      ageGroup: attendance.ageGroup,
       parentEmail: attendance.parentContact,
       parentPhone: '', // Default to empty string
       medicalNotes: attendance.medicalNotes,

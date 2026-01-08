@@ -5,6 +5,7 @@ class StudentAttendance {
   final bool isNew;
   final String parentContact;
   final String medicalNotes;
+  final String ageGroup;
 
   StudentAttendance({
     required this.id,
@@ -13,6 +14,7 @@ class StudentAttendance {
     required this.isNew,
     required this.parentContact,
     required this.medicalNotes,
+    required this.ageGroup,
   });
 
   // Factory constructor to create from Firestore map data
@@ -24,6 +26,7 @@ class StudentAttendance {
       isNew: data['isNew'] ?? false,
       parentContact: data['parentContact'] ?? '',
       medicalNotes: data['medicalNotes'] ?? '',
+      ageGroup: data['ageGroup'] ?? '',
     );
   }
 
@@ -35,6 +38,7 @@ class StudentAttendance {
       'isNew': isNew,
       'parentContact': parentContact,
       'medicalNotes': medicalNotes,
+      'ageGroup': ageGroup,
     };
   }
 }

@@ -11,8 +11,10 @@ class StudentParentViewModel extends ChangeNotifier {
   String? _studentName;
   String? _parentContact;
   String? _medicalNotes;
-  DateTime? _childDob; // Add child's date of birth
-  final List<SessionAttendanceRecord> _allAttendanceRecords = []; // Store all records before filtering
+  DateTime? _childDob;
+  String? _assignedClassId;
+  String? _ageGroup;
+  final List<SessionAttendanceRecord> _allAttendanceRecords = [];
   final List<SessionAttendanceRecord> _attendanceRecords = [];
   bool _isLoading = false;
 
@@ -23,12 +25,18 @@ class StudentParentViewModel extends ChangeNotifier {
   List<Map<String, dynamic>> _recentAttendance = [];
   bool _isPaymentDue = false;
   List<Map<String, dynamic>> _childBadges = [];
+  int _currentStreak = 0;
+  int _longestStreak = 0;
+  List<Map<String, dynamic>> _registeredClasses = [];
+  double _attendanceRate = 0.0;
 
   // Getters
   String? get studentName => _studentName;
   String? get parentContact => _parentContact;
   String? get medicalNotes => _medicalNotes;
   DateTime? get childDob => _childDob;
+  String? get assignedClassId => _assignedClassId;
+  String? get ageGroup => _ageGroup;
   List<SessionAttendanceRecord> get attendanceRecords => _attendanceRecords;
   bool get isLoading => _isLoading;
 
@@ -39,6 +47,10 @@ class StudentParentViewModel extends ChangeNotifier {
   List<Map<String, dynamic>> get recentAttendance => _recentAttendance;
   bool get isPaymentDue => _isPaymentDue;
   List<Map<String, dynamic>> get childBadges => _childBadges;
+  int get currentStreak => _currentStreak;
+  int get longestStreak => _longestStreak;
+  List<Map<String, dynamic>> get registeredClasses => _registeredClasses;
+  double get attendanceRate => _attendanceRate;
 
   // Getters for child and parent names
   String? get parentName => _getParentName();
@@ -50,6 +62,52 @@ class StudentParentViewModel extends ChangeNotifier {
 
   // Get current user ID
   String? get currentUserId => _auth.currentUser?.uid;
+
+  // Get student ID
+  String? get studentId => _studentId;
+
+  // Get session activities/drills for a specific session
+  Future<List<Map<String, dynamic>>> getSessionActivities(String sessionId) async {
+    try {
+      // Try scheduled_classes collection first (for admin-scheduled classes)
+      DocumentSnapshot classDoc = await _db.collection('sessions').doc(sessionId).get();
+
+      if (classDoc.exists) {
+        final classData = classDoc.data() as Map<String, dynamic>;
+
+        // Check if drills are embedded directly in the class document
+        if (classData['drills'] != null) {
+          return List<Map<String, dynamic>>.from(classData['drills']);
+        }
+
+        // Otherwise, fetch drills by ID
+        final drillIds = List<String>.from(classData['drillIds'] ?? []);
+        List<Map<String, dynamic>> activities = [];
+
+        for (String drillId in drillIds) {
+          DocumentSnapshot drillDoc = await _db.collection('drills').doc(drillId).get();
+          if (drillDoc.exists) {
+            final drillData = drillDoc.data() as Map<String, dynamic>;
+            activities.add({
+              'id': drillDoc.id,
+              'title': drillData['title'] ?? 'Activity',
+              'description': drillData['description'] ?? '',
+              'duration': drillData['duration'] ?? 0,
+              'drillType': drillData['drillType'] ?? 'Unknown',
+              'badgeFocus': drillData['badgeFocus'] ?? 'Unknown',
+              'ageGroup': drillData['ageGroup'] ?? 'Unknown',
+            });
+          }
+        }
+
+        return activities;
+      }
+    } catch (e) {
+      print("Error loading session activities: $e");
+    }
+
+    return [];
+  }
 
   // Initialize with student data - for now we'll find the student associated with the current user
   Future<void> initializeStudentData() async {
@@ -100,14 +158,18 @@ class StudentParentViewModel extends ChangeNotifier {
   Future<void> _findStudentByParentContact() async {
     try {
       String? userEmail = _auth.currentUser?.email;
+      print("DEBUG _findStudentByParentContact: Starting with email: $userEmail, uid: ${_auth.currentUser?.uid}");
 
       // First, try to find from the users collection (where parent accounts are linked)
       DocumentSnapshot userDoc = await _db.collection('users').doc(_auth.currentUser?.uid).get();
+      print("DEBUG _findStudentByParentContact: User doc exists: ${userDoc.exists}");
       if (userDoc.exists && userDoc.data() != null) {
         Map<String, dynamic> userData = userDoc.data() as Map<String, dynamic>;
+        print("DEBUG _findStudentByParentContact: User data keys: ${userData.keys.toList()}");
         if (userData.containsKey('linkedStudentId')) {
           _studentId = userData['linkedStudentId'];
           _studentName = userData['linkedStudentName'] ?? 'Demo Student';
+          print("DEBUG _findStudentByParentContact: Found linkedStudentId: $_studentId, name: $_studentName");
 
           // Now find this student in sessions to get full details
           QuerySnapshot sessionQuery = await _db.collection('sessions').get();
@@ -125,11 +187,14 @@ class StudentParentViewModel extends ChangeNotifier {
       }
 
       // If not found in user profile, try to find by email in the main students collection
+      print("DEBUG _findStudentByParentContact: Trying to find by email in main students collection");
       if (userEmail != null) {
         QuerySnapshot studentQuery = await _db.collection('students')
             .where('parentEmail', isEqualTo: userEmail)
             .limit(1)
             .get();
+
+        print("DEBUG _findStudentByParentContact: Found ${studentQuery.docs.length} students with email $userEmail");
 
         if (studentQuery.docs.isNotEmpty) {
           var studentDoc = studentQuery.docs.first;
@@ -140,6 +205,9 @@ class StudentParentViewModel extends ChangeNotifier {
           _parentContact = studentData['parentEmail'];
           _medicalNotes = studentData['medicalNotes'] ?? '';
           _childDob = (studentData['dateOfBirth'] as Timestamp?)?.toDate();
+
+          print("DEBUG _findStudentByParentContact: Found student from main collection - ID: $_studentId, name: $_studentName");
+          print("DEBUG _findStudentByParentContact: Student data keys: ${studentData.keys.toList()}");
 
           return;
         }
@@ -179,36 +247,86 @@ class StudentParentViewModel extends ChangeNotifier {
     }
   }
 
-  // Load student profile from Firestore
+  // Load student profile from Firestore - Following student_profile_view.dart pattern
   Future<void> _loadStudentProfile() async {
-    if (_studentId == null) return;
+    if (_studentId == null) {
+      print("DEBUG: Cannot load profile - studentId is null");
+      return;
+    }
 
     try {
-      // In the current database structure, student data is stored within sessions
-      // For demonstration, we'll use mock data or look for the first session with this student
-      QuerySnapshot sessionQuery = await _db.collection('sessions').get();
+      print("DEBUG: Loading profile for studentId: $_studentId");
+      // Check if student exists in the main 'students' collection first
+      DocumentSnapshot mainStudentDoc = await _db.collection('students').doc(_studentId!).get();
 
-      for (var sessionDoc in sessionQuery.docs) {
-        DocumentSnapshot studentDoc = await sessionDoc.reference.collection('students').doc(_studentId!).get();
+      if (mainStudentDoc.exists) {
+        final data = mainStudentDoc.data() as Map<String, dynamic>;
+        print("DEBUG: Found student in main collection");
+        print("DEBUG: Student data keys: ${data.keys}");
 
-        if (studentDoc.exists) {
-          var studentData = studentDoc.data() as Map<String, dynamic>;
-          _studentName = studentData['name'] ?? 'Demo Student';
-          _parentContact = studentData['parentContact'] ?? 'Not Provided';
-          _medicalNotes = studentData['medicalNotes'] ?? 'None';
+        _studentName = data['name'] ?? 'Student';
+        _parentContact = data['parentEmail'] ?? data['parentPhone'] ?? 'Not Provided';
+        _medicalNotes = data['medicalNotes'] ?? 'None';
+        _assignedClassId = data['assignedClassId'];
+        _ageGroup = data['ageGroup'];
 
-          // If date of birth is available in the student data, load it
-          var dobTimestamp = studentData['dateOfBirth'] as Timestamp?;
-          if (dobTimestamp != null) {
-            _childDob = dobTimestamp.toDate();
+        print("DEBUG: Loaded - Name: $_studentName, AssignedClass: $_assignedClassId, AgeGroup: $_ageGroup");
+
+        // Load date of birth
+        var dobTimestamp = data['dateOfBirth'] as Timestamp?;
+        if (dobTimestamp != null) {
+          _childDob = dobTimestamp.toDate();
+        }
+
+        // If no age group but has assignedClassId, get it from the session
+        if ((_ageGroup == null || _ageGroup!.isEmpty) && _assignedClassId != null) {
+          _ageGroup = await _getAgeGroupFromSession(_assignedClassId!);
+          print("DEBUG: Fetched age group from session: $_ageGroup");
+        }
+      } else {
+        print("DEBUG: Student not found in main collection, checking sessions");
+
+        // Fallback: look for student data in session subcollections
+        QuerySnapshot sessionQuery = await _db.collection('sessions').get();
+
+        for (var sessionDoc in sessionQuery.docs) {
+          DocumentSnapshot studentDoc = await sessionDoc.reference.collection('students').doc(_studentId!).get();
+
+          if (studentDoc.exists) {
+            var studentData = studentDoc.data() as Map<String, dynamic>;
+            var sessionData = sessionDoc.data() as Map<String, dynamic>;
+
+            _studentName = studentData['name'] ?? 'Student';
+            _parentContact = studentData['parentContact'] ?? 'Not Provided';
+            _medicalNotes = studentData['medicalNotes'] ?? 'None';
+            _ageGroup = sessionData['ageGroup'] ?? 'Unknown';
+
+            var dobTimestamp = studentData['dateOfBirth'] as Timestamp?;
+            if (dobTimestamp != null) {
+              _childDob = dobTimestamp.toDate();
+            }
+
+            break;
           }
-
-          break;
         }
       }
     } catch (e) {
       print("Error loading student profile: $e");
     }
+  }
+
+  // Helper to get age group from session
+  Future<String> _getAgeGroupFromSession(String sessionId) async {
+    try {
+      DocumentSnapshot sessionDoc = await _db.collection('sessions').doc(sessionId).get();
+      if (sessionDoc.exists) {
+        final data = sessionDoc.data() as Map<String, dynamic>;
+        return data['ageGroup'] ?? 'Unknown';
+      }
+    } catch (e) {
+      print("Error getting age group from session: $e");
+    }
+    return 'Unknown';
   }
 
   // Load attendance records for this student
@@ -313,8 +431,10 @@ class StudentParentViewModel extends ChangeNotifier {
     try {
       await _loadAttendanceStats();
       await _loadRecentAttendance();
+      await _calculateStreaks();
       await _loadChildBadges();
       await _loadPaymentStatus();
+      await _loadRegisteredClasses();
     } catch (e) {
       print("Error loading additional data: $e");
     }
@@ -337,8 +457,50 @@ class StudentParentViewModel extends ChangeNotifier {
           }
         }
       }
+
+      // Calculate attendance rate
+      _attendanceRate = _totalDaysCount > 0
+          ? (_presentDaysCount / _totalDaysCount) * 100
+          : 0.0;
     } catch (e) {
       print("Error loading attendance stats: $e");
+    }
+  }
+
+  // Calculate attendance streaks
+  Future<void> _calculateStreaks() async {
+    try {
+      _currentStreak = 0;
+      _longestStreak = 0;
+      int tempStreak = 0;
+
+      // Sort records by date (oldest first)
+      final sortedRecords = _allAttendanceRecords
+          .where((record) => record.status != 'Upcoming')
+          .toList()
+        ..sort((a, b) => (a.date?.compareTo(b.date ?? DateTime(0))) ?? 0);
+
+      for (int i = 0; i < sortedRecords.length; i++) {
+        if (sortedRecords[i].isPresent) {
+          tempStreak++;
+          if (tempStreak > _longestStreak) {
+            _longestStreak = tempStreak;
+          }
+          // If this is the most recent record, it's the current streak
+          if (i == sortedRecords.length - 1) {
+            _currentStreak = tempStreak;
+          }
+        } else {
+          // Reset streak on absence
+          // But only set current streak to 0 if this is the most recent
+          if (i == sortedRecords.length - 1) {
+            _currentStreak = 0;
+          }
+          tempStreak = 0;
+        }
+      }
+    } catch (e) {
+      print("Error calculating streaks: $e");
     }
   }
 
@@ -432,22 +594,145 @@ class StudentParentViewModel extends ChangeNotifier {
     }
   }
 
-  // Load payment status
+  // Load payment status - Following finance_view.dart logic
   Future<void> _loadPaymentStatus() async {
     try {
-      // Check if payment is due for current month
+      if (_studentId == null) {
+        _isPaymentDue = false;
+        return;
+      }
+
       final now = DateTime.now();
-      final currentMonthYear = "${now.year}-${now.month.toString().padLeft(2, '0')}";
+      final currentMonth = "${now.year}-${now.month.toString().padLeft(2, '0')}";
 
-      // In a real app, you would check a payments collection for this student
-      // For now, we'll simulate based on whether there are upcoming classes
-      _isPaymentDue = false; // Default to not due
+      // Check main students collection for attendance history
+      DocumentSnapshot studentDoc = await _db.collection('students').doc(_studentId!).get();
 
-      // You could implement actual payment checking logic here
-      // For example, checking a 'payments' collection for the current month
-      // Or checking if the student has upcoming classes but no payment record
+      if (studentDoc.exists) {
+        final data = studentDoc.data() as Map<String, dynamic>;
+        final attendanceHistory = Map<String, dynamic>.from(data['attendanceHistory'] ?? {});
+
+        // If student attended this month, consider payment made (finance_view.dart logic)
+        bool hasAttendedThisMonth = attendanceHistory.entries.any((entry) {
+          return entry.key.startsWith(currentMonth);
+        });
+
+        // Payment is due if NOT attended this month (or has no attendance history)
+        _isPaymentDue = !hasAttendedThisMonth;
+      } else {
+        // If student not in main collection, default to payment due
+        _isPaymentDue = true;
+      }
     } catch (e) {
       print("Error loading payment status: $e");
+      _isPaymentDue = false; // Safe default
+    }
+  }
+
+  // Load registered classes - Improved to use assignedClassId first
+  Future<void> _loadRegisteredClasses() async {
+    try {
+      _registeredClasses = [];
+
+      if (_studentId == null) {
+        print("DEBUG: studentId is null, cannot load classes");
+        return;
+      }
+
+      print("DEBUG: Loading classes for student: $_studentId");
+      print("DEBUG: Assigned class ID: $_assignedClassId");
+      print("DEBUG: Age group: $_ageGroup");
+
+      // Priority 1: If student has an assignedClassId, get that specific class
+      // Check for both null and empty string
+      if (_assignedClassId != null && _assignedClassId!.trim().isNotEmpty) {
+        print("DEBUG: Fetching assigned class: $_assignedClassId");
+        DocumentSnapshot assignedClass = await _db.collection('sessions').doc(_assignedClassId!).get();
+
+        if (assignedClass.exists) {
+          var classData = assignedClass.data() as Map<String, dynamic>;
+          print("DEBUG: Assigned class found. Status: ${classData['status']}");
+          if (classData['status'] == 'Scheduled' || classData['status'] == 'Upcoming') {
+            DateTime startTime = (classData['startTime'] as Timestamp).toDate();
+
+            _registeredClasses.add({
+              'id': assignedClass.id,
+              'className': classData['className'] ?? 'Class',
+              'venue': classData['venue'] ?? 'Venue',
+              'startTime': startTime,
+              'ageGroup': classData['ageGroup'] ?? _ageGroup ?? 'Unknown',
+              'isAssigned': true,
+            });
+            print("DEBUG: Added assigned class: ${classData['className']}");
+          } else {
+            print("DEBUG: Assigned class status is not Scheduled: ${classData['status']}");
+          }
+        } else {
+          print("DEBUG: Assigned class not found in scheduled_classes");
+        }
+      } else {
+        print("DEBUG: No assigned class ID (null or empty)");
+      }
+
+      // Priority 2: Get other upcoming scheduled classes for student's age group
+      String? childAgeGroup = _ageGroup;
+      if (childAgeGroup == null || childAgeGroup.isEmpty || childAgeGroup == 'Unknown') {
+        if (_childDob != null) {
+          double childAge = AgeCalculator.calculateAgeInYears(_childDob!);
+          childAgeGroup = AgeCalculator.getAgeGroupForChild(childAge);
+        } else {
+          // Get age group from attendance records
+          for (var record in _allAttendanceRecords) {
+            if (record.ageGroup != 'Unknown') {
+              childAgeGroup = record.ageGroup;
+              break;
+            }
+          }
+        }
+      }
+
+      if (childAgeGroup != null && childAgeGroup != 'Unknown') {
+        // Query scheduled_classes collection for upcoming classes
+        QuerySnapshot upcomingClasses = await _db
+            .collection('sessions')
+            .where('ageGroup', isEqualTo: childAgeGroup)
+            .get();
+
+        // Filter for scheduled classes and sort by startTime
+        List<QueryDocumentSnapshot> filteredClasses = upcomingClasses.docs
+            .where((doc) {
+              final data = doc.data() as Map<String, dynamic>;
+              return data['status'] == 'Scheduled' || data['status'] == 'Upcoming';
+            })
+            .toList()
+          ..sort((a, b) {
+            final aData = a.data() as Map<String, dynamic>;
+            final bData = b.data() as Map<String, dynamic>;
+            final aTime = (aData['startTime'] as Timestamp?)?.toDate() ?? DateTime(0);
+            final bTime = (bData['startTime'] as Timestamp?)?.toDate() ?? DateTime(0);
+            return aTime.compareTo(bTime); // Ascending order
+          });
+
+        // Take first 5
+        for (var classDoc in filteredClasses.take(5)) {
+          // Skip if already added as assigned class
+          if (classDoc.id == _assignedClassId) continue;
+
+          var classData = classDoc.data() as Map<String, dynamic>;
+          DateTime startTime = (classData['startTime'] as Timestamp).toDate();
+
+          _registeredClasses.add({
+            'id': classDoc.id,
+            'className': classData['className'] ?? 'Class',
+            'venue': classData['venue'] ?? 'Venue',
+            'startTime': startTime,
+            'ageGroup': classData['ageGroup'] ?? childAgeGroup,
+            'isAssigned': false,
+          });
+        }
+      }
+    } catch (e) {
+      print("Error loading registered classes: $e");
     }
   }
 
@@ -519,16 +804,21 @@ class StudentParentViewModel extends ChangeNotifier {
       }
     }
 
+    // Use _ageGroup field if available (loaded from student profile)
+    if (_ageGroup != null && _ageGroup!.isNotEmpty && _ageGroup != 'Unknown') {
+      childAgeGroup = _ageGroup;
+    }
+
     if (childAgeGroup != null && childAgeGroup.isNotEmpty && childAgeGroup != 'Unknown') {
+      // Query scheduled_classes collection for classes matching the age group
+      // Sorting will be done in the UI
       return _db.collection('sessions')
           .where('ageGroup', isEqualTo: childAgeGroup)
-          .orderBy('startTime', descending: true)
           .snapshots();
     }
 
-    // If no age group can be determined, return all sessions as fallback
+    // If no age group can be determined, return all scheduled classes as fallback
     return _db.collection('sessions')
-        .orderBy('startTime', descending: true)
         .snapshots();
   }
 

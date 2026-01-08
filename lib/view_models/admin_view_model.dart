@@ -208,6 +208,8 @@ class AdminViewModel extends ChangeNotifier {
     required String ageGroup,
     required String badgeFocus,
     required List<DrillData> drills,
+    String? pdfUrl,
+    String? pdfFileName,
   }) async {
     _isLoading = true;
     notifyListeners();
@@ -228,13 +230,15 @@ class AdminViewModel extends ChangeNotifier {
         };
       }).toList();
 
-      // Create the session template
+      // Create the session template with PDF metadata
       await _firestoreService.createSessionTemplate(
         title: title,
         ageGroup: ageGroup,
         badgeFocus: badgeFocus,
         drills: drillsData,
         createdBy: coachId,
+        pdfUrl: pdfUrl,
+        pdfFileName: pdfFileName,
       );
 
       _isLoading = false;
@@ -301,7 +305,8 @@ class AdminViewModel extends ChangeNotifier {
   // Schedule a class using a template
   Future<bool> scheduleClass({
     required String templateId,
-    required String coachId,
+    required String leadCoachId,
+    String? assistantCoachId,
     required String venue,
   }) async {
     if (_selectedDate == null || _selectedTime == null || venue.isEmpty) {
@@ -334,16 +339,38 @@ class AdminViewModel extends ChangeNotifier {
       // 3. Use default duration based on age group, as it's not in the template model
       int durationMinutes = (template.ageGroup == 'Mega Kickers' ? 50 : 45);
 
-      // 4. Call Firestore service to create the scheduled class
-      await _firestoreService.createScheduledClass(
+      // 4. Convert drills from template to map format
+      List<Map<String, dynamic>> drillsData = template.drills.map<Map<String, dynamic>>((drill) {
+        return <String, dynamic>{
+          'title': drill.title,
+          'duration': drill.duration,
+          'instructions': drill.instructions,
+          'equipment': drill.equipment,
+          'progression_easier': drill.progressionEasier,
+          'progression_harder': drill.progressionHarder,
+          'learning_goals': drill.learningGoals,
+          'animationUrl': drill.animationUrl,
+        };
+      }).toList();
+
+      // 5. Call Firestore service to create the scheduled class with drills
+      String sessionId = await _firestoreService.createScheduledClassWithDrills(
         templateId: templateId,
         className: template.title,
         venue: venue,
         dateTime: fullDateTime,
         ageGroup: template.ageGroup,
-        coachId: coachId,
+        leadCoachId: leadCoachId,
+        assistantCoachId: assistantCoachId,
         durationMinutes: durationMinutes,
         badgeFocus: template.badgeFocus,
+        drills: drillsData,
+      );
+
+      // 6. Auto-assign all students with matching age group to this class
+      await _firestoreService.autoAssignStudentsToClass(
+        sessionId: sessionId,
+        ageGroup: template.ageGroup,
       );
 
       _isLoading = false;

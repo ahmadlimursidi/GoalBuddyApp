@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../services/firestore_service.dart';
 import '../models/drill_data.dart';
 
@@ -83,57 +84,86 @@ class ActiveSessionViewModel extends ChangeNotifier {
     return "$minutes:$seconds";
   }
 
+  // Check if we're on the last drill
+  bool get isLastDrill => _currentDrillIndex == _drills.length - 1;
+
+  // Check if all drills are completed (on last drill and timer is done)
+  bool get isSessionComplete => isLastDrill && _remainingSeconds == 0;
+
   // --- LOGIC ---
 
-  // Load drills based on the session ID
+  // Load drills based on the session ID (from sessions collection)
   Future<void> loadSession(String sessionId) async {
-    debugPrint("ViewModel loading session for sessionId: '$sessionId'"); // <-- DEBUG PRINT
+    debugPrint("ViewModel loading session for sessionId: '$sessionId'");
     _isLoading = true;
     _isPaused = true;
     _timer?.cancel();
     notifyListeners();
 
     try {
-      // Get the scheduled class by ID
-      final scheduledClassDoc = await _firestoreService.getScheduledClass(sessionId);
-      final scheduledClassData = scheduledClassDoc.data() as Map<String, dynamic>?;
-      
-      if (scheduledClassData == null) {
-        throw Exception("Scheduled class not found");
+      // Get the session by ID from the sessions collection
+      final sessionDoc = await _firestoreService.getSession(sessionId);
+      final sessionData = sessionDoc.data() as Map<String, dynamic>?;
+
+      if (sessionData == null) {
+        throw Exception("Session not found");
       }
 
-      // Get the template ID from the scheduled class
-      String? templateId = scheduledClassData['templateId'];
-      if (templateId == null) {
-        throw Exception("Template ID not found in scheduled class");
-      }
+      // Check if drills are embedded in the session
+      if (sessionData['drills'] != null && sessionData['drills'] is List) {
+        // Load drills directly from the session
+        _drills = (sessionData['drills'] as List).asMap().entries.map((entry) {
+          int index = entry.key;
+          Map<String, dynamic> drillData = entry.value as Map<String, dynamic>;
 
-      // Get the session template by ID
-      final template = await _firestoreService.getSessionTemplateById(templateId);
-      if (template == null) {
-        throw Exception("Session template not found");
-      }
+          return Drill(
+            id: "drill_$index",
+            title: drillData['title'] ?? '',
+            instructions: drillData['instructions'] ?? '',
+            equipment: drillData['equipment'] ?? '',
+            category: _getCategoryFromIndex(index),
+            durationSeconds: int.tryParse(drillData['duration']?.toString() ?? '') != null
+                ? int.parse(drillData['duration'].toString()) * 60 // Convert minutes to seconds
+                : 300, // Default to 5 minutes if parsing fails
+            progressionEasier: drillData['progression_easier'] ?? '',
+            progressionHarder: drillData['progression_harder'] ?? '',
+            learningGoals: drillData['learning_goals'] ?? '',
+            animationUrl: drillData['animationUrl'],
+            sortOrder: index,
+          );
+        }).toList();
+      } else {
+        // Fallback: Load from template if drills are not embedded
+        String? templateId = sessionData['templateId'];
+        if (templateId == null) {
+          throw Exception("No drills found and no template ID in session");
+        }
 
-      // Map the template drills to Drill objects
-      _drills = template.drills.asMap().entries.map((entry) {
-        int index = entry.key;
-        DrillData drillData = entry.value;
-        return Drill(
-          id: "drill_$index", // Generate a temporary ID
-          title: drillData.title,
-          instructions: drillData.instructions,
-          equipment: drillData.equipment,
-          category: _getCategoryFromIndex(index), // Map index to category
-          durationSeconds: int.tryParse(drillData.duration) != null 
-              ? int.parse(drillData.duration) * 60 // Convert minutes to seconds
-              : 300, // Default to 5 minutes if parsing fails
-          progressionEasier: drillData.progressionEasier,
-          progressionHarder: drillData.progressionHarder,
-          learningGoals: drillData.learningGoals,
-          animationUrl: drillData.animationUrl,
-          sortOrder: index, // Use index as sort order
-        );
-      }).toList();
+        final template = await _firestoreService.getSessionTemplateById(templateId);
+        if (template == null) {
+          throw Exception("Session template not found");
+        }
+
+        _drills = template.drills.asMap().entries.map((entry) {
+          int index = entry.key;
+          DrillData drillData = entry.value;
+          return Drill(
+            id: "drill_$index",
+            title: drillData.title,
+            instructions: drillData.instructions,
+            equipment: drillData.equipment,
+            category: _getCategoryFromIndex(index),
+            durationSeconds: int.tryParse(drillData.duration) != null
+                ? int.parse(drillData.duration) * 60
+                : 300,
+            progressionEasier: drillData.progressionEasier,
+            progressionHarder: drillData.progressionHarder,
+            learningGoals: drillData.learningGoals,
+            animationUrl: drillData.animationUrl,
+            sortOrder: index,
+          );
+        }).toList();
+      }
 
       if (_drills.isNotEmpty) {
         _currentDrillIndex = 0;
@@ -210,6 +240,19 @@ class ActiveSessionViewModel extends ChangeNotifier {
       _totalDurationSeconds = currentDrill!.durationSeconds;
     }
     notifyListeners();
+  }
+
+  // Finish the session and mark it as completed in Firestore
+  Future<bool> finishSession(String sessionId) async {
+    try {
+      _pauseTimer();
+      await _firestoreService.completeSession(sessionId);
+      debugPrint("Session $sessionId marked as Completed");
+      return true;
+    } catch (e) {
+      debugPrint("Error finishing session: $e");
+      return false;
+    }
   }
 
   @override

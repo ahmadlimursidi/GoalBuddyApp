@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:lottie/lottie.dart';
 import '../../config/theme.dart';
 import '../../models/attendance_model.dart';
 import '../../models/student_progress_model.dart';
@@ -87,12 +88,12 @@ class _StudentProfileViewState extends State<StudentProfileView> {
                   DateTime.now().difference(data['createdAt'].toDate()).inDays <= 7 : isNew,
                 parentContact: data['parentContact'] ?? parentContact,
                 medicalNotes: data['medicalNotes'] ?? medicalNotes,
+                ageGroup: data['ageGroup'] ?? '',
               );
 
-              // Determine age group from assigned class or from the main collection
+              // Determine age group
               String ageGroup = data['ageGroup'] ?? data['assignedClassId'] ?? 'Unknown';
               if (data['assignedClassId'] != null) {
-                // If there's an assigned class ID, get the age group from the session
                 _getAgeGroupFromSession(data['assignedClassId']).then((sessionAgeGroup) {
                   if (mounted) {
                     setState(() {
@@ -102,7 +103,6 @@ class _StudentProfileViewState extends State<StudentProfileView> {
                   }
                 });
               } else {
-                // Use age group from the main collection if available
                 if (data['ageGroup'] != null) {
                   ageGroup = data['ageGroup'];
                 }
@@ -110,15 +110,13 @@ class _StudentProfileViewState extends State<StudentProfileView> {
               }
             });
           } else {
-            // If not in main 'students' collection, try to find student in session collections
-            // This requires finding which session the student belongs to
+            // Fallback for session-based student records
             QuerySnapshot sessionsSnapshot = await FirebaseFirestore.instance.collection('sessions').get();
 
             for (var sessionDoc in sessionsSnapshot.docs) {
               DocumentSnapshot sessionStudentDoc = await sessionDoc.reference.collection('students').doc(studentId).get();
               if (sessionStudentDoc.exists) {
                 final data = sessionStudentDoc.data() as Map<String, dynamic>;
-                // Safely read session data and ageGroup (avoid calling [] on a nullable value)
                 final sessionDataObj = sessionDoc.data();
                 String sessionAgeGroup = 'Unknown';
                 if (sessionDataObj is Map<String, dynamic>) {
@@ -133,17 +131,17 @@ class _StudentProfileViewState extends State<StudentProfileView> {
                     isNew: data['isNew'] ?? isNew,
                     parentContact: data['parentContact'] ?? parentContact,
                     medicalNotes: data['medicalNotes'] ?? medicalNotes,
+                    ageGroup: sessionAgeGroup,
                   );
 
                   _studentProgress = _createStudentProgress(studentId, data['name'] ?? studentName, sessionAgeGroup, data['earnedBadges'] ?? []);
                 });
-                break; // Found the student, exit the loop
+                break;
               }
             }
           }
         } catch (e) {
           print("Error loading student data: $e");
-          // Fallback to the original data if there's an error
           setState(() {
             _student = StudentAttendance(
               id: studentId,
@@ -152,10 +150,9 @@ class _StudentProfileViewState extends State<StudentProfileView> {
               isNew: isNew,
               parentContact: parentContact,
               medicalNotes: medicalNotes,
+              ageGroup: '',
             );
-
-            // For fallback, determine age group from name or use default
-            String ageGroup = _guessAgeGroupFromName(studentName);
+            String ageGroup = 'Junior Kickers';
             _studentProgress = _createStudentProgress(studentId, studentName, ageGroup, []);
           });
         }
@@ -179,7 +176,6 @@ class _StudentProfileViewState extends State<StudentProfileView> {
 
   // Helper method to create student progress based on age group
   StudentProgress _createStudentProgress(String studentId, String name, String ageGroup, List<dynamic> earnedBadgesList) {
-    // Convert list of dynamic to list of strings
     List<String> earnedBadgeIds = [];
     for (var badge in earnedBadgesList) {
       if (badge is String) {
@@ -187,21 +183,8 @@ class _StudentProfileViewState extends State<StudentProfileView> {
       }
     }
   
-    // Generate age-appropriate badge progression
-    // For older age groups, allow earning badges from younger groups too
     List<String> possibleBadges = _getPossibleBadgesForAgeGroup(ageGroup);
-
-    // Select a few badges as earned based on age group
-    List<String> selectedEarnedBadges = [];
-    if (earnedBadgeIds.isEmpty) {
-      // If no badges are set in Firestore, generate some based on age group
-      selectedEarnedBadges = _generateEarnedBadges(ageGroup, possibleBadges);
-    } else {
-      // Use the badges from Firestore
-      selectedEarnedBadges = earnedBadgeIds;
-    }
-
-    // Select a badge as current based on progression
+    List<String> selectedEarnedBadges = earnedBadgeIds.isEmpty ? _generateEarnedBadges(ageGroup, possibleBadges) : earnedBadgeIds;
     String? currentBadgeId = _selectCurrentBadge(ageGroup, selectedEarnedBadges, possibleBadges);
 
     return StudentProgress(
@@ -213,271 +196,304 @@ class _StudentProfileViewState extends State<StudentProfileView> {
     );
   }
 
-  // Get possible badges based on age group (older groups can earn from younger ones too)
+  // Get possible badges based on age group
   List<String> _getPossibleBadgesForAgeGroup(String ageGroup) {
     List<String> possibleBadges = [];
-
     if (ageGroup == 'Mega Kickers') {
-      // Mega Kickers can earn badges from all age groups
       possibleBadges.addAll([
-        'lk_attention_listening', 'lk_sharing', 'lk_kicking', 'lk_confidence', // Little Kicks
-        'jk_kicking', 'jk_imagination', 'jk_physical_literacy', 'jk_team_player', // Junior Kickers
-        'mk_leadership', 'mk_physical_literacy', 'mk_all_rounder', 'mk_problem_solver', 'mk_kicking', 'mk_match_play', // Mighty Kickers
-        'mega_attacking', 'mega_defending', 'mega_tactician', 'mega_captain', 'mega_all_rounder', 'mega_referee' // Mega Kickers
+        'lk_attention_listening', 'lk_sharing', 'lk_kicking', 'lk_confidence',
+        'jk_kicking', 'jk_imagination', 'jk_physical_literacy', 'jk_team_player',
+        'mk_leadership', 'mk_physical_literacy', 'mk_all_rounder', 'mk_problem_solver', 'mk_kicking', 'mk_match_play',
+        'mega_attacking', 'mega_defending', 'mega_tactician', 'mega_captain', 'mega_all_rounder', 'mega_referee'
       ]);
     } else if (ageGroup == 'Mighty Kickers') {
-      // Mighty Kickers can earn from Mighty and below
       possibleBadges.addAll([
-        'lk_attention_listening', 'lk_sharing', 'lk_kicking', 'lk_confidence', // Little Kicks
-        'jk_kicking', 'jk_imagination', 'jk_physical_literacy', 'jk_team_player', // Junior Kickers
-        'mk_leadership', 'mk_physical_literacy', 'mk_all_rounder', 'mk_problem_solver', 'mk_kicking', 'mk_match_play' // Mighty Kickers
+        'lk_attention_listening', 'lk_sharing', 'lk_kicking', 'lk_confidence',
+        'jk_kicking', 'jk_imagination', 'jk_physical_literacy', 'jk_team_player',
+        'mk_leadership', 'mk_physical_literacy', 'mk_all_rounder', 'mk_problem_solver', 'mk_kicking', 'mk_match_play'
       ]);
     } else if (ageGroup == 'Junior Kickers') {
-      // Junior Kickers can earn from Junior and below
       possibleBadges.addAll([
-        'lk_attention_listening', 'lk_sharing', 'lk_kicking', 'lk_confidence', // Little Kicks
-        'jk_kicking', 'jk_imagination', 'jk_physical_literacy', 'jk_team_player' // Junior Kickers
+        'lk_attention_listening', 'lk_sharing', 'lk_kicking', 'lk_confidence',
+        'jk_kicking', 'jk_imagination', 'jk_physical_literacy', 'jk_team_player'
       ]);
     } else {
-      // Little Kicks can only earn Little Kicks badges
       possibleBadges.addAll([
-        'lk_attention_listening', 'lk_sharing', 'lk_kicking', 'lk_confidence' // Little Kicks
+        'lk_attention_listening', 'lk_sharing', 'lk_kicking', 'lk_confidence'
       ]);
     }
-
     return possibleBadges;
   }
 
-  // Generate some earned badges based on age group
-  List<String> _generateEarnedBadges(String ageGroup, List<String> possibleBadges) {
-    List<String> earnedBadges = [];
-
-    // For each age group, select a random subset of possible badges as earned
-    // The number of earned badges will vary by age group
-    int maxBadges = 0;
-    if (ageGroup == 'Mega Kickers') {
-      maxBadges = 12; // Older students have more badges
-    } else if (ageGroup == 'Mighty Kickers') {
-      maxBadges = 8;
-    } else if (ageGroup == 'Junior Kickers') {
-      maxBadges = 4;
-    } else {
-      maxBadges = 2; // Little Kicks start with fewer badges
-    }
-
-    // Randomly select some badges
-    int badgesToSelect = (maxBadges * 0.5).round(); // Start with about half earned
-    if (badgesToSelect > possibleBadges.length) {
-      badgesToSelect = possibleBadges.length;
-    }
-
-    // Use a simple algorithm to pick random badges without duplicates
-    List<String> availableBadges = List.from(possibleBadges);
-    for (int i = 0; i < badgesToSelect && availableBadges.isNotEmpty; i++) {
-      int randomIndex = (DateTime.now().millisecondsSinceEpoch + i) % availableBadges.length;
-      earnedBadges.add(availableBadges[randomIndex]);
-      availableBadges.removeAt(randomIndex);
-    }
-
-    return earnedBadges;
-  }
-
-  // Select which badge the student should currently be working on
   String? _selectCurrentBadge(String ageGroup, List<String> earnedBadges, List<String> possibleBadges) {
-    // Select a badge that hasn't been earned yet
     List<String> unearnedBadges = possibleBadges.where((badge) => !earnedBadges.contains(badge)).toList();
-
-    if (unearnedBadges.isNotEmpty) {
-      // Randomly select one of the unearned badges as current
-      int randomIndex = (DateTime.now().millisecondsSinceEpoch + 999) % unearnedBadges.length;
-      return unearnedBadges[randomIndex];
-    }
-
-    return null; // All badges earned
+    return unearnedBadges.isNotEmpty ? unearnedBadges[0] : null;
   }
 
-  // Helper method to guess age group from name (fallback)
-  String _guessAgeGroupFromName(String name) {
-    // This is a simple heuristic - in reality, this would come from the session/assigned class
-    if (name.contains('Lucas') || name.contains('Ethan') || name.contains('Aiden')) {
-      return 'Junior Kickers';
-    } else if (name.contains('Muhammad') || name.contains('Sofia')) {
-      return 'Little Kicks';
-    } else if (name.contains('Rudhran') || name.contains('Ariq')) {
-      return 'Mega Kickers';
-    } else if (name.contains('Jayden') || name.contains('Iman')) {
-      return 'Mighty Kickers';
+  List<String> _generateEarnedBadges(String ageGroup, List<String> possibleBadges) {
+    int count;
+    switch (ageGroup) {
+      case 'Mega Kickers': count = 6; break;
+      case 'Mighty Kickers': count = 4; break;
+      case 'Junior Kickers': count = 3; break;
+      default: count = 2; break;
     }
-    return 'Junior Kickers'; // Default
+    count = count.clamp(0, possibleBadges.length);
+    return possibleBadges.take(count).toList();
   }
 
   @override
   Widget build(BuildContext context) {
-    // If no student data loaded yet, show loading
     if (_student == null) {
       return Scaffold(
-        backgroundColor: AppTheme.lightBackground,
-        appBar: AppBar(
-          title: const Text("Student Profile"),
-          elevation: 0,
+        backgroundColor: const Color(0xFFF5F7FA),
+        appBar: AppBar(title: const Text("Student Profile"), elevation: 0, backgroundColor: AppTheme.primaryRed),
+        body: Center(
+          child: CircularProgressIndicator(color: AppTheme.primaryRed),
         ),
-        body: const Center(child: CircularProgressIndicator()),
       );
     }
 
     return Scaffold(
-      backgroundColor: AppTheme.lightBackground,
+      backgroundColor: const Color(0xFFF5F7FA), // Light grey background
       appBar: AppBar(
         title: const Text("Student Profile"),
+        backgroundColor: AppTheme.primaryRed,
+        foregroundColor: Colors.white,
         elevation: 0,
+        centerTitle: true,
       ),
-      body: SingleChildScrollView(
-        child: Column(
-          children: [
-            // 1. Header Profile Section
-            Container(
-              color: Colors.white,
-              padding: const EdgeInsets.all(24),
+      body: Column(
+        children: [
+          // 1. Immersive Header
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.fromLTRB(20, 10, 20, 30),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [AppTheme.primaryRed, Color(0xFFC41A1F)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: const BorderRadius.only(
+                bottomLeft: Radius.circular(30),
+                bottomRight: Radius.circular(30),
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.15),
+                  blurRadius: 10,
+                  offset: const Offset(0, 5),
+                ),
+              ],
+            ),
+            child: Column(
+              children: [
+                // Avatar with shadow
+                Container(
+                  width: 90,
+                  height: 90,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 10, offset: const Offset(0, 4)),
+                    ],
+                    border: Border.all(color: Colors.white, width: 3),
+                  ),
+                  child: Center(
+                    child: Text(
+                      "${_student!.name.substring(0, 1).toUpperCase()}${_student!.name.split(' ').length > 1 ? _student!.name.split(' ')[1][0].toUpperCase() : ''}",
+                      style: const TextStyle(fontSize: 32, color: AppTheme.primaryRed, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                
+                // Name
+                Text(
+                  _student!.name,
+                  style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white),
+                ),
+                const SizedBox(height: 6),
+                
+                // Dynamic Age & Group Info
+                FutureBuilder<DocumentSnapshot>(
+                  future: FirebaseFirestore.instance.collection('students').doc(_student?.id).get(),
+                  builder: (context, snapshot) {
+                    String ageInfo = "${_studentProgress?.ageGroup ?? 'Junior Kickers'}";
+                    
+                    if (snapshot.hasData && snapshot.data!.exists) {
+                      final data = snapshot.data!.data() as Map<String, dynamic>?;
+                      if (data != null) {
+                        if (data['ageGroup'] != null) ageInfo = data['ageGroup'];
+                        if (data['dateOfBirth'] != null) {
+                          DateTime dob = (data['dateOfBirth'] as Timestamp).toDate();
+                          int age = DateTime.now().year - dob.year;
+                          if (DateTime.now().month < dob.month || (DateTime.now().month == dob.month && DateTime.now().day < dob.day)) {
+                            age--;
+                          }
+                          ageInfo += " • $age Years Old";
+                        }
+                      }
+                    }
+                    return Text(ageInfo, style: const TextStyle(color: Colors.white70, fontSize: 14, fontWeight: FontWeight.w500));
+                  },
+                ),
+              ],
+            ),
+          ),
+
+          // 2. Content Body
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(20),
               child: Column(
                 children: [
-                  // Changed from CircleAvatar to rectangular container
-                  Container(
-                    width: 120,
-                    height: 120,
-                    decoration: BoxDecoration(
-                      color: Colors.orange,
-                      borderRadius: BorderRadius.circular(12),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.grey.withOpacity(0.3),
-                          blurRadius: 10,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
-                    ),
-                    child: Center(
-                      child: Text(
-                        "${_student!.name.substring(0, 1).toUpperCase()}${_student!.name.split(' ').length > 1 ? _student!.name.split(' ')[_student!.name.split(' ').length - 1][0].toUpperCase() : ''}",
-                        style: const TextStyle(fontSize: 32, color: Colors.white, fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    _student!.name,
-                    style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-                  ),
-                  Text("${_studentProgress?.ageGroup ?? 'Junior Kickers'} • 3 Years Old", style: TextStyle(color: Colors.grey)),
-                  const SizedBox(height: 16),
+                  // Student Information Card
+                  FutureBuilder<DocumentSnapshot>(
+                    future: FirebaseFirestore.instance.collection('students').doc(_student?.id).get(),
+                    builder: (context, snapshot) {
+                      if (snapshot.hasData && snapshot.data!.exists) {
+                        final data = snapshot.data!.data() as Map<String, dynamic>?;
+                        String? dob;
+                        String? parentEmail;
+                        String? parentPhone;
 
-                  // Medical Alert Badge (only show if medical notes exist)
-                  if (_student!.medicalNotes != "None" && _student!.medicalNotes.isNotEmpty && _student!.medicalNotes.toLowerCase() != "none")
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: Colors.red.shade50,
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: Colors.red.shade200),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
+                        if (data != null) {
+                          if (data['dateOfBirth'] != null) {
+                            DateTime dobDate = (data['dateOfBirth'] as Timestamp).toDate();
+                            dob = "${dobDate.day.toString().padLeft(2, '0')}/${dobDate.month.toString().padLeft(2, '0')}/${dobDate.year}";
+                          }
+                          parentEmail = data['parentEmail'];
+                          parentPhone = data['parentPhone'];
+                        }
+
+                        if (dob != null || parentEmail != null || parentPhone != null) {
+                          return Column(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(16),
+                                decoration: _cardDecoration(),
+                                child: Column(
+                                  children: [
+                                    if (dob != null) ...[
+                                      _buildInfoRow(Icons.cake, "Date of Birth", dob),
+                                      if (parentEmail != null || parentPhone != null) const Divider(height: 20),
+                                    ],
+                                    if (parentEmail != null) ...[
+                                      _buildInfoRow(Icons.email_outlined, "Parent Email", parentEmail),
+                                      if (parentPhone != null) const Divider(height: 20),
+                                    ],
+                                    if (parentPhone != null)
+                                      _buildInfoRow(Icons.phone_outlined, "Parent Phone", parentPhone),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(height: 20),
+                            ],
+                          );
+                        }
+                      }
+                      return const SizedBox.shrink();
+                    },
+                  ),
+
+                  // Action Buttons (Conditional Medical Info)
+                  FutureBuilder<DocumentSnapshot>(
+                    future: FirebaseFirestore.instance.collection('students').doc(_student?.id).get(),
+                    builder: (context, snapshot) {
+                      bool hasMedicalInfo = false;
+                      Map<String, dynamic>? studentData;
+
+                      if (snapshot.hasData && snapshot.data!.exists) {
+                        studentData = snapshot.data!.data() as Map<String, dynamic>?;
+                        String? notes = studentData?['medicalNotes'];
+                        hasMedicalInfo = notes != null && notes.isNotEmpty && notes.toLowerCase() != 'none';
+                      }
+
+                      return Row(
                         children: [
-                          Icon(Icons.medical_services_outlined, size: 16, color: Colors.red[700]),
-                          const SizedBox(width: 8),
-                          Text("Medical: ${_student!.medicalNotes}", style: TextStyle(color: Colors.red[700], fontWeight: FontWeight.bold)),
+                          Expanded(
+                            child: _buildActionButton(
+                              icon: Icons.call,
+                              label: "Contact Parent",
+                              color: AppTheme.pitchGreen,
+                              onTap: () {
+                                // Call logic
+                              },
+                            ),
+                          ),
+                          if (hasMedicalInfo) ...[
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: _buildActionButton(
+                                icon: Icons.medical_services_outlined,
+                                label: "Medical Info",
+                                color: Colors.red,
+                                onTap: () => _showMedicalDialog(studentData),
+                              ),
+                            ),
+                          ],
                         ],
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 20),
+
+                  // Attendance Section
+                  _buildSectionHeader("Recent Attendance", Icons.calendar_today),
+                  Container(
+                    padding: const EdgeInsets.all(20),
+                    decoration: _cardDecoration(),
+                    child: FutureBuilder<List<Widget>>(
+                      future: _getAttendanceDots(),
+                      builder: (context, snapshot) {
+                        if (snapshot.hasData) {
+                          return Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: snapshot.data!);
+                        }
+                        return const Center(child: CircularProgressIndicator());
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+
+                  // Badges Section
+                  if (_studentProgress != null) ...[
+                    _buildSectionHeader("Badge Progress", Icons.emoji_events),
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: _cardDecoration(),
+                      child: BadgeGrid(
+                        ageGroup: _studentProgress!.ageGroup,
+                        earnedBadgeIds: _studentProgress!.earnedBadgeIds,
+                        currentBadgeId: _studentProgress!.currentBadgeId,
                       ),
                     ),
-                ],
-              ),
-            ),
+                    const SizedBox(height: 24),
+                  ],
 
-            const SizedBox(height: 16),
-
-            // 2. Action Buttons (Contact)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: ElevatedButton.icon(
-                      onPressed: () {}, // Mock Call
-                      icon: const Icon(Icons.phone),
-                      label: const Text("Call Parent"),
-                      style: ElevatedButton.styleFrom(backgroundColor: AppTheme.pitchGreen),
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: () {}, // Mock Incident Report
-                      icon: const Icon(Icons.report_problem_outlined, color: Colors.orange),
-                      label: const Text("Report Incident", style: TextStyle(color: Colors.orange)),
-                      style: OutlinedButton.styleFrom(side: const BorderSide(color: Colors.orange)),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 24),
-
-            // 3. Attendance History (New Section)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                   const Text("Recent Attendance", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                   const SizedBox(height: 12),
-                   Row(
-                     children: [
-                       _buildAttendanceDot(true, "12 Oct"),
-                       _buildAttendanceDot(true, "05 Oct"),
-                       _buildAttendanceDot(false, "28 Sep"), // Absent
-                       _buildAttendanceDot(true, "21 Sep"),
-                       _buildAttendanceDot(true, "14 Sep"),
-                     ],
-                   )
-                ],
-              )
-            ),
-
-            const SizedBox(height: 24),
-
-            // 4. Badge Progress Section
-            if (_studentProgress != null)
-              BadgeGrid(
-                ageGroup: _studentProgress!.ageGroup,
-                earnedBadgeIds: _studentProgress!.earnedBadgeIds,
-                currentBadgeId: _studentProgress!.currentBadgeId,
-              ),
-
-            const SizedBox(height: 24),
-
-            // 5. Coach Notes (New Section)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
+                  // Notes Section
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text("Coach Notes", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                      _buildSectionHeader("Coach Notes", Icons.note_alt_outlined),
                       IconButton(
-                        icon: const Icon(Icons.add, color: AppTheme.primaryRed),
-                        onPressed: () => _addNote(),
+                        icon: const Icon(Icons.add_circle, color: AppTheme.primaryRed),
+                        onPressed: _addNote,
                       ),
                     ],
                   ),
-                  const SizedBox(height: 12),
                   if (_notes.isEmpty)
-                    const Padding(
-                      padding: EdgeInsets.all(16.0),
-                      child: Text(
-                        "No notes yet. Tap the + button to add a note.",
-                        style: TextStyle(color: Colors.grey, fontStyle: FontStyle.italic),
+                    Container(
+                      padding: const EdgeInsets.all(24),
+                      decoration: _cardDecoration(),
+                      child: const Center(
+                        child: Text(
+                          "No notes yet.\nTap + to add one.",
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: Colors.grey),
+                        ),
                       ),
                     )
                   else
@@ -487,70 +503,84 @@ class _StudentProfileViewState extends State<StudentProfileView> {
                       itemCount: _notes.length,
                       itemBuilder: (context, index) {
                         final note = _notes[index];
-                        return _buildNoteCard(
-                          _formatDate(note['timestamp']),
-                          note['text'],
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: 12),
+                          padding: const EdgeInsets.all(16),
+                          decoration: _cardDecoration(),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                _formatDate(note['timestamp']),
+                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.grey),
+                              ),
+                              const SizedBox(height: 6),
+                              Text(note['text'], style: const TextStyle(fontSize: 14, color: AppTheme.darkText, height: 1.4)),
+                            ],
+                          ),
                         );
                       },
                     ),
+                  const SizedBox(height: 30),
                 ],
               ),
             ),
-
-            const SizedBox(height: 32),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildAttendanceDot(bool present, String date) {
-    return Padding(
-      padding: const EdgeInsets.only(right: 16.0),
-      child: Column(
-        children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: present ? AppTheme.pitchGreen.withOpacity(0.1) : Colors.red.withOpacity(0.1),
-              shape: BoxShape.circle,
-              border: Border.all(color: present ? AppTheme.pitchGreen : Colors.red, width: 2),
-            ),
-            child: Icon(
-              present ? Icons.check : Icons.close,
-              size: 20,
-              color: present ? AppTheme.pitchGreen : Colors.red
-            ),
           ),
-          const SizedBox(height: 4),
-          Text(date, style: const TextStyle(fontSize: 10, color: Colors.grey)),
         ],
       ),
     );
   }
 
-  Widget _buildNoteCard(String date, String note) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      elevation: 0,
-      color: Colors.white,
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+  // --- Helper Widgets ---
+
+  Widget _buildActionButton({required IconData icon, required String label, required Color color, required VoidCallback onTap}) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: color.withOpacity(0.5)),
+          boxShadow: [BoxShadow(color: color.withOpacity(0.1), blurRadius: 4, offset: const Offset(0, 2))],
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Text(date, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.grey)),
-            const SizedBox(height: 4),
-            Text(note, style: const TextStyle(fontSize: 14)),
+            Icon(icon, color: color, size: 18),
+            const SizedBox(width: 8),
+            Text(label, style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 14)),
           ],
         ),
       ),
     );
   }
 
-  // Add a new note
+  Widget _buildSectionHeader(String title, IconData icon) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12, left: 4),
+      child: Row(
+        children: [
+          Icon(icon, size: 20, color: AppTheme.primaryRed),
+          const SizedBox(width: 8),
+          Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppTheme.darkText)),
+        ],
+      ),
+    );
+  }
+
+  BoxDecoration _cardDecoration() {
+    return BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(20),
+      boxShadow: [
+        BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4)),
+      ],
+    );
+  }
+
+  // --- Logic Helpers (Keep unchanged) ---
   void _addNote() async {
     final arguments = ModalRoute.of(context)?.settings.arguments;
     final args = arguments as Map<String, dynamic>?;
@@ -562,6 +592,7 @@ class _StudentProfileViewState extends State<StudentProfileView> {
         builder: (context) {
           String inputText = '';
           return AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
             title: const Text("Add Coach Note"),
             content: TextField(
               autofocus: true,
@@ -569,19 +600,11 @@ class _StudentProfileViewState extends State<StudentProfileView> {
                 hintText: "Enter your note here...",
                 border: OutlineInputBorder(),
               ),
-              onChanged: (value) {
-                inputText = value;
-              },
+              onChanged: (value) => inputText = value,
             ),
             actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text("Cancel"),
-              ),
-              TextButton(
-                onPressed: () => Navigator.pop(context, inputText),
-                child: const Text("Add Note", style: TextStyle(color: AppTheme.primaryRed)),
-              ),
+              TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel", style: TextStyle(color: Colors.grey))),
+              TextButton(onPressed: () => Navigator.pop(context, inputText), child: const Text("Add Note", style: TextStyle(color: AppTheme.primaryRed))),
             ],
           );
         },
@@ -590,37 +613,392 @@ class _StudentProfileViewState extends State<StudentProfileView> {
       if (noteText != null && noteText.trim().isNotEmpty) {
         try {
           await _firestoreService.addNote(studentId, noteText.trim());
-          // Note will be automatically added to the list via the stream listener
         } catch (e) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text("Error adding note: $e")),
-          );
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error adding note: $e")));
         }
       }
     }
   }
 
-  // Format date for display
   String _formatDate(DateTime date) {
     final now = DateTime.now();
     final difference = date.difference(now).inDays.abs();
-
-    if (difference == 0) {
-      return "Today";
-    } else if (difference == 1) {
-      return "Yesterday";
-    } else {
-      return "${date.day} ${_getMonthName(date.month)}";
-    }
+    if (difference == 0) return "Today";
+    if (difference == 1) return "Yesterday";
+    return "${date.day} ${_getMonthName(date.month)}";
   }
 
-  // Helper to get month name
   String _getMonthName(int month) {
-    const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
-    ];
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     return months[month - 1];
   }
 
+  String _formatDateFromKey(String dateKey) {
+    try {
+      List<String> parts = dateKey.split('-');
+      if (parts.length == 3) {
+        int year = int.parse(parts[0]);
+        int month = int.parse(parts[1]);
+        int day = int.parse(parts[2]);
+        DateTime date = DateTime(year, month, day);
+        return "${date.day} ${_getMonthName(date.month)}";
+      }
+    } catch (e) {
+      print("Error parsing date key: $e");
+    }
+    return dateKey; 
+  }
+
+  Future<List<Widget>> _getAttendanceDots() async {
+    final arguments = ModalRoute.of(context)?.settings.arguments;
+    final args = arguments as Map<String, dynamic>?;
+    String? studentId = args?['studentId'] as String?;
+
+    if (studentId != null) {
+      try {
+        DocumentSnapshot studentDoc = await FirebaseFirestore.instance.collection('students').doc(studentId).get();
+        if (studentDoc.exists) {
+          final data = studentDoc.data() as Map<String, dynamic>?;
+          final attendanceHistory = data?['attendanceHistory'] as Map<String, dynamic>?;
+
+          if (attendanceHistory != null && attendanceHistory.isNotEmpty) {
+            var sortedEntries = attendanceHistory.entries.toList()..sort((a, b) => b.key.compareTo(a.key));
+            List<Widget> attendanceDots = [];
+            int count = 0;
+            for (var entry in sortedEntries) {
+              if (count >= 5) break;
+              String dateKey = entry.key;
+              String status = entry.value.toString();
+              String displayDate = _formatDateFromKey(dateKey);
+              bool present = status.toLowerCase() == 'present' || status.toLowerCase() == 'p';
+              attendanceDots.add(_buildAttendanceDot(present, displayDate));
+              count++;
+            }
+            while (attendanceDots.length < 5) {
+              attendanceDots.add(_buildPlaceholderDot());
+            }
+            return attendanceDots;
+          }
+        }
+      } catch (e) {
+        print("Error loading attendance dots: $e");
+      }
+    }
+    return List.generate(5, (index) => _buildPlaceholderDot());
+  }
+
+  Widget _buildAttendanceDot(bool present, String date) {
+    return Column(
+      children: [
+        Container(
+          width: 40,
+          height: 40,
+          decoration: BoxDecoration(
+            color: present ? AppTheme.pitchGreen.withOpacity(0.15) : Colors.red.withOpacity(0.1),
+            shape: BoxShape.circle,
+            border: Border.all(color: present ? AppTheme.pitchGreen : Colors.red, width: 2),
+          ),
+          child: Icon(present ? Icons.check : Icons.close, size: 20, color: present ? AppTheme.pitchGreen : Colors.red),
+        ),
+        const SizedBox(height: 6),
+        Text(date, style: const TextStyle(fontSize: 10, color: Colors.grey, fontWeight: FontWeight.w500)),
+      ],
+    );
+  }
+
+  Widget _buildPlaceholderDot() {
+    return Column(
+      children: [
+        Container(
+          width: 40,
+          height: 40,
+          decoration: BoxDecoration(
+            color: Colors.grey.withOpacity(0.1),
+            shape: BoxShape.circle,
+            border: Border.all(color: Colors.grey[300]!, width: 2),
+          ),
+          child: const Icon(Icons.remove, size: 20, color: Colors.grey),
+        ),
+        const SizedBox(height: 6),
+        const Text("-", style: TextStyle(fontSize: 10, color: Colors.grey)),
+      ],
+    );
+  }
+
+  Widget _buildInfoRow(IconData icon, String label, String value) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, size: 20, color: AppTheme.primaryRed),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: Colors.grey,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                value,
+                style: const TextStyle(
+                  fontSize: 15,
+                  color: AppTheme.darkText,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _showMedicalDialog(Map<String, dynamic>? studentData) {
+    if (studentData == null) return;
+
+    String medicalNotes = studentData['medicalNotes'] ?? 'No medical information available';
+    String allergies = studentData['allergies'] ?? 'None';
+    String medications = studentData['medications'] ?? 'None';
+    String emergencyContact = studentData['emergencyContact'] ?? 'N/A';
+    String emergencyPhone = studentData['emergencyPhone'] ?? 'N/A';
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return Dialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          child: Container(
+            constraints: const BoxConstraints(maxHeight: 600),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Header
+                Container(
+                  padding: const EdgeInsets.all(20),
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [Colors.red, Color(0xFFD32F2F)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.only(
+                      topLeft: Radius.circular(20),
+                      topRight: Radius.circular(20),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.medical_services_rounded, color: Colors.white, size: 28),
+                      const SizedBox(width: 12),
+                      const Expanded(
+                        child: Text(
+                          "Medical Information",
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close, color: Colors.white),
+                        onPressed: () => Navigator.pop(context),
+                      ),
+                    ],
+                  ),
+                ),
+
+                // Content
+                Flexible(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.all(20),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Medical Alert Banner
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: Colors.red.shade50,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: Colors.red.shade200, width: 2),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(Icons.warning_amber_rounded, color: Colors.red.shade700, size: 32),
+                              const SizedBox(width: 12),
+                              const Expanded(
+                                child: Text(
+                                  "Important Medical Alert",
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.red,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+
+                        // Medical Notes
+                        _buildMedicalInfoSection(
+                          "Medical Notes",
+                          medicalNotes,
+                          Icons.note_alt_outlined,
+                          Colors.red,
+                        ),
+                        const SizedBox(height: 16),
+
+                        // Allergies
+                        _buildMedicalInfoSection(
+                          "Allergies",
+                          allergies,
+                          Icons.warning_outlined,
+                          Colors.orange,
+                        ),
+                        const SizedBox(height: 16),
+
+                        // Medications
+                        _buildMedicalInfoSection(
+                          "Current Medications",
+                          medications,
+                          Icons.medication_outlined,
+                          Colors.blue,
+                        ),
+                        const SizedBox(height: 20),
+
+                        // Emergency Contact
+                        const Text(
+                          "Emergency Contact",
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: AppTheme.darkText,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: Colors.grey.shade50,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: Colors.grey.shade300),
+                          ),
+                          child: Column(
+                            children: [
+                              Row(
+                                children: [
+                                  const Icon(Icons.person_outline, size: 20, color: AppTheme.primaryRed),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Text(
+                                      emergencyContact,
+                                      style: const TextStyle(
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const Divider(height: 20),
+                              Row(
+                                children: [
+                                  const Icon(Icons.phone_outlined, size: 20, color: AppTheme.primaryRed),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Text(
+                                      emergencyPhone,
+                                      style: const TextStyle(
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+
+                // Footer
+                Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: () => Navigator.pop(context),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppTheme.primaryRed,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        elevation: 0,
+                      ),
+                      child: const Text(
+                        "Close",
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildMedicalInfoSection(String title, String content, IconData icon, Color color) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(icon, size: 20, color: color),
+            const SizedBox(width: 8),
+            Text(
+              title,
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+                color: color,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.05),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: color.withOpacity(0.2)),
+          ),
+          child: Text(
+            content,
+            style: const TextStyle(
+              fontSize: 14,
+              color: AppTheme.darkText,
+              height: 1.5,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
 }

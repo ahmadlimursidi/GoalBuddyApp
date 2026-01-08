@@ -22,14 +22,16 @@ import 'views/session/attendance_view.dart';
 import 'views/session/student_list_view.dart';
 import 'views/session/student_profile_view.dart';
 import 'views/resources/coach_resources_view.dart';
+import 'views/resources/drill_library_view.dart';
 import 'views/admin/create_session_template_view.dart';
 import 'views/admin/schedule_class_view.dart';
 import 'views/admin/admin_students_view.dart';
 import 'views/admin/admin_coaches_view.dart';
+import 'views/admin/class_details_view.dart';
 import 'views/splash/splash_view.dart';
-import 'screens/drills_list_screen.dart';
-import 'screens/drill_session_screen.dart';
 import 'views/finance/finance_view.dart';
+import 'views/parent/parent_schedule_view.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -88,6 +90,7 @@ class MyApp extends StatelessWidget {
         '/admin_dashboard': (context) => const AdminDashboardView(),
         '/admin_analytics': (context) => const AdminAnalyticsView(), // Add admin analytics route
         '/student_parent_dashboard': (context) => const StudentParentDashboardView(), // Add student/parent dashboard route
+        '/parent_schedule': (context) => const ParentScheduleView(), // Add parent schedule route
         '/active_session': (context) => const ActiveSessionView(),
         '/attendance': (context) => const AttendanceView(),
         '/student_profile': (context) => const StudentProfileView(),
@@ -95,14 +98,73 @@ class MyApp extends StatelessWidget {
         '/coach_resources': (context) => const CoachResourcesView(), // Add coach resources route
         '/create_session_template': (context) => const CreateSessionTemplateView(),
         '/schedule_class': (context) => const ScheduleClassView(),
-        '/drills_list': (context) => const DrillsListScreen(),
-        '/drill_session': (context) => const DrillSessionScreen(
-          drillName: 'Sample Drill',
-          animationAssetPath: 'assets/animations/sample_animation.json',
-        ),
+        '/drill_library': (context) => const DrillLibraryView(),
         '/finance': (context) => const FinanceView(),
         '/admin_students': (context) => const AdminStudentsView(),
         '/admin_coaches': (context) => const AdminCoachesView(),
+      },
+      onGenerateRoute: (settings) {
+        // Handle /class_details route with dynamic data fetching
+        if (settings.name == '/class_details') {
+          final args = settings.arguments as Map<String, dynamic>?;
+          if (args != null && args.containsKey('sessionId')) {
+            return MaterialPageRoute(
+              builder: (context) => ClassDetailsWrapper(
+                sessionId: args['sessionId'] as String,
+              ),
+            );
+          }
+        }
+        return null;
+      },
+    );
+  }
+}
+
+// Wrapper widget that fetches session data and displays ClassDetailsView
+class ClassDetailsWrapper extends StatelessWidget {
+  final String sessionId;
+
+  const ClassDetailsWrapper({
+    Key? key,
+    required this.sessionId,
+  }) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<DocumentSnapshot>(
+      future: FirebaseFirestore.instance.collection('sessions').doc(sessionId).get(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return Scaffold(
+            appBar: AppBar(
+              title: const Text('Class Details'),
+              backgroundColor: AppTheme.primaryRed,
+              foregroundColor: Colors.white,
+            ),
+            body: const Center(child: CircularProgressIndicator()),
+          );
+        }
+
+        if (snapshot.hasError || !snapshot.hasData || !snapshot.data!.exists) {
+          return Scaffold(
+            appBar: AppBar(
+              title: const Text('Class Details'),
+              backgroundColor: AppTheme.primaryRed,
+              foregroundColor: Colors.white,
+            ),
+            body: const Center(
+              child: Text('Error loading class details'),
+            ),
+          );
+        }
+
+        final classData = snapshot.data!.data() as Map<String, dynamic>;
+
+        return ClassDetailsView(
+          classId: sessionId,
+          classData: classData,
+        );
       },
     );
   }

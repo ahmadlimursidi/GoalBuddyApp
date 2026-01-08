@@ -3,7 +3,6 @@ import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../view_models/admin_view_model.dart';
 import '../../config/theme.dart';
-import '../../models/drill_data.dart';
 import '../../models/session_template.dart';
 
 class ScheduleClassView extends StatefulWidget {
@@ -18,15 +17,16 @@ class _ScheduleClassViewState extends State<ScheduleClassView> {
   final TextEditingController _venueController = TextEditingController();
   
   String? _selectedTemplateId;
-  String? _selectedCoachId;
+  String? _selectedLeadCoachId;
+  String? _selectedAssistantCoachId;
   String _selectedTemplateName = '';
   String _selectedTemplateAgeGroup = '';
+  String _searchQuery = '';
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      // Clear previous selections when the view is built
       final viewModel = Provider.of<AdminViewModel>(context, listen: false);
       viewModel.setDate(null);
       viewModel.setTime(null);
@@ -41,296 +41,404 @@ class _ScheduleClassViewState extends State<ScheduleClassView> {
 
   @override
   Widget build(BuildContext context) {
-    // Access the ViewModel
     final viewModel = Provider.of<AdminViewModel>(context);
 
     return Scaffold(
+      backgroundColor: const Color(0xFFF5F7FA), // Light grey background
       appBar: AppBar(
-        title: const Text("Schedule Class", style: TextStyle(color: Colors.white)),
+        title: const Text("Schedule Class"),
         backgroundColor: AppTheme.primaryRed,
         foregroundColor: Colors.white,
         elevation: 0,
+        centerTitle: true,
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text("Schedule Class", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 16),
+      body: Column(
+        children: [
+          // 1. Header
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.fromLTRB(24, 10, 24, 30),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [AppTheme.primaryRed, Color(0xFFC41A1F)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.1),
+                  blurRadius: 10,
+                  offset: const Offset(0, 5),
+                ),
+              ],
+              borderRadius: const BorderRadius.only(
+                bottomLeft: Radius.circular(24),
+                bottomRight: Radius.circular(24),
+              ),
+            ),
+            child: const Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  "New Session",
+                  style: TextStyle(color: Colors.white70, fontSize: 14, fontWeight: FontWeight.w500),
+                ),
+                SizedBox(height: 8),
+                Text(
+                  "Class Details",
+                  style: TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.bold),
+                ),
+              ],
+            ),
+          ),
 
-              // 1. Template Selector
-              StreamBuilder<List<SessionTemplate>>(
-                stream: viewModel.getSessionTemplates(),
-                builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const CircularProgressIndicator();
-                  }
-                  
-                  if (snapshot.hasError) {
-                    return Text('Error: ${snapshot.error}');
-                  }
-                  
-                  List<SessionTemplate> templates = snapshot.data ?? [];
-                  
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text("Select Template", style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
-                      const SizedBox(height: 8),
-                      DropdownButtonFormField<String>(
-                        decoration: const InputDecoration(
-                          labelText: "Session Template",
-                          border: OutlineInputBorder(),
-                          prefixIcon: Icon(Icons.list),
-                        ),
-                        initialValue: _selectedTemplateId,
-                        items: templates.map((template) {
-                          return DropdownMenuItem<String>(
-                            value: template.id,
-                            child: Text("${template.title} (${template.ageGroup})"),
-                          );
-                        }).toList(),
-                        onChanged: (String? value) {
-                          if (value != null) {
-                            setState(() {
-                              _selectedTemplateId = value;
-                              // Find the selected template to get its name and age group
-                              SessionTemplate? selectedTemplate = templates.firstWhere(
-                                (template) => template.id == value,
-                                orElse: () => SessionTemplate.blank(),
-                              );
-                              _selectedTemplateName = selectedTemplate.title;
-                              _selectedTemplateAgeGroup = selectedTemplate.ageGroup;
-                            });
-                          }
-                        },
-                        validator: (value) {
-                          if (value == null || value.isEmpty) {
-                            return 'Please select a template';
-                          }
-                          return null;
-                        },
+          // 2. Form Content
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(20),
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // --- SECTION 1: TEMPLATE SELECTION ---
+                    _buildSectionHeader("Curriculum", Icons.library_books),
+                    Container(
+                      padding: const EdgeInsets.all(20),
+                      decoration: _cardDecoration(),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          if (_selectedTemplateId != null) ...[
+                            // Selected State
+                            Container(
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                color: AppTheme.pitchGreen.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: AppTheme.pitchGreen),
+                              ),
+                              child: Row(
+                                children: [
+                                  const Icon(Icons.check_circle, color: AppTheme.pitchGreen),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          _selectedTemplateName,
+                                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: AppTheme.darkText),
+                                        ),
+                                        Text(
+                                          _selectedTemplateAgeGroup,
+                                          style: const TextStyle(color: Colors.grey),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  IconButton(
+                                    icon: const Icon(Icons.close, color: Colors.grey),
+                                    onPressed: () {
+                                      setState(() {
+                                        _selectedTemplateId = null;
+                                        _selectedTemplateName = '';
+                                        _selectedTemplateAgeGroup = '';
+                                      });
+                                    },
+                                  )
+                                ],
+                              ),
+                            ),
+                          ] else ...[
+                            // Search State
+                            TextField(
+                              decoration: _inputDecoration("Search Templates...", Icons.search),
+                              onChanged: (value) {
+                                setState(() {
+                                  _searchQuery = value.toLowerCase();
+                                });
+                              },
+                            ),
+                            const SizedBox(height: 12),
+                            Container(
+                              height: 180,
+                              decoration: BoxDecoration(
+                                border: Border.all(color: Colors.grey[200]!),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: StreamBuilder<List<SessionTemplate>>(
+                                stream: viewModel.getSessionTemplates(),
+                                builder: (context, snapshot) {
+                                  if (snapshot.connectionState == ConnectionState.waiting) {
+                                    return const Center(child: CircularProgressIndicator());
+                                  }
+                                  if (snapshot.hasError) return Center(child: Text('Error: ${snapshot.error}'));
+
+                                  List<SessionTemplate> templates = snapshot.data ?? [];
+                                  final filteredTemplates = templates.where((template) =>
+                                    template.title.toLowerCase().contains(_searchQuery) ||
+                                    template.ageGroup.toLowerCase().contains(_searchQuery)
+                                  ).toList();
+
+                                  if (filteredTemplates.isEmpty) {
+                                    return const Center(child: Text("No templates found", style: TextStyle(color: Colors.grey)));
+                                  }
+
+                                  return ListView.separated(
+                                    itemCount: filteredTemplates.length,
+                                    separatorBuilder: (ctx, i) => const Divider(height: 1),
+                                    itemBuilder: (context, index) {
+                                      final template = filteredTemplates[index];
+                                      return ListTile(
+                                        title: Text(template.title, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                                        subtitle: Text(template.ageGroup, style: const TextStyle(fontSize: 12)),
+                                        trailing: const Icon(Icons.chevron_right, size: 16),
+                                        onTap: () {
+                                          setState(() {
+                                            _selectedTemplateId = template.id;
+                                            _selectedTemplateName = template.title;
+                                            _selectedTemplateAgeGroup = template.ageGroup;
+                                          });
+                                        },
+                                      );
+                                    },
+                                  );
+                                },
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
-                      const SizedBox(height: 16),
-                      
-                      // Display selected template details if one is selected
-                      if (_selectedTemplateId != null && _selectedTemplateId!.isNotEmpty)
-                        Card(
-                          child: Padding(
-                            padding: const EdgeInsets.all(16),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  "Selected: $_selectedTemplateName",
-                                  style: const TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.bold,
+                    ),
+                    const SizedBox(height: 24),
+
+                    // --- SECTION 2: LOGISTICS ---
+                    _buildSectionHeader("Logistics", Icons.access_time_filled),
+                    Container(
+                      padding: const EdgeInsets.all(20),
+                      decoration: _cardDecoration(),
+                      child: Column(
+                        children: [
+                          // Date Picker
+                          FormField<DateTime>(
+                            initialValue: viewModel.selectedDate,
+                            validator: (val) => val == null ? 'Required' : null,
+                            builder: (state) {
+                              return InkWell(
+                                onTap: () async {
+                                  DateTime? picked = await showDatePicker(
+                                    context: context,
+                                    initialDate: viewModel.selectedDate ?? DateTime.now(),
+                                    firstDate: DateTime.now(),
+                                    lastDate: DateTime.now().add(const Duration(days: 365)),
+                                    builder: (context, child) {
+                                      return Theme(
+                                        data: Theme.of(context).copyWith(
+                                          colorScheme: const ColorScheme.light(primary: AppTheme.primaryRed),
+                                        ),
+                                        child: child!,
+                                      );
+                                    },
+                                  );
+                                  if (picked != null) {
+                                    viewModel.setDate(picked);
+                                    state.didChange(picked);
+                                  }
+                                },
+                                child: InputDecorator(
+                                  decoration: _inputDecoration("Date", Icons.calendar_today, errorText: state.errorText),
+                                  child: Text(
+                                    viewModel.selectedDate != null
+                                        ? "${viewModel.selectedDate!.day}/${viewModel.selectedDate!.month}/${viewModel.selectedDate!.year}"
+                                        : "Select Date",
+                                    style: TextStyle(color: viewModel.selectedDate != null ? AppTheme.darkText : Colors.grey[600]),
                                   ),
                                 ),
-                                const SizedBox(height: 8),
-                                Text(
-                                  "Age Group: $_selectedTemplateAgeGroup",
-                                  style: const TextStyle(fontSize: 14),
-                                ),
-                              ],
-                            ),
+                              );
+                            },
                           ),
-                        ),
-                    ],
-                  );
-                },
-              ),
-              const SizedBox(height: 16),
+                          const SizedBox(height: 16),
+                          
+                          // Time Picker
+                          FormField<TimeOfDay>(
+                            initialValue: viewModel.selectedTime,
+                            validator: (val) => val == null ? 'Required' : null,
+                            builder: (state) {
+                              return InkWell(
+                                onTap: () async {
+                                  TimeOfDay? picked = await showTimePicker(
+                                    context: context,
+                                    initialTime: viewModel.selectedTime ?? const TimeOfDay(hour: 9, minute: 0),
+                                  );
+                                  if (picked != null) {
+                                    viewModel.setTime(picked);
+                                    state.didChange(picked);
+                                  }
+                                },
+                                child: InputDecorator(
+                                  decoration: _inputDecoration("Start Time", Icons.access_time, errorText: state.errorText),
+                                  child: Text(
+                                    viewModel.selectedTime != null ? viewModel.selectedTime!.format(context) : "Select Time",
+                                    style: TextStyle(color: viewModel.selectedTime != null ? AppTheme.darkText : Colors.grey[600]),
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                          const SizedBox(height: 16),
 
-              // 2. Coach Selector
-              StreamBuilder<QuerySnapshot>(
-                stream: viewModel.getCoaches(),
-                builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const CircularProgressIndicator();
-                  }
-                  
-                  if (snapshot.hasError) {
-                    return Text('Error: ${snapshot.error}');
-                  }
-                  
-                  List<DocumentSnapshot> coaches = snapshot.data?.docs ?? [];
-                  
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text("Assign Coach", style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
-                      const SizedBox(height: 8),
-                      DropdownButtonFormField<String>(
-                        decoration: const InputDecoration(
-                          labelText: "Select Coach",
-                          border: OutlineInputBorder(),
-                          prefixIcon: Icon(Icons.person),
-                        ),
-                        initialValue: _selectedCoachId,
-                        items: coaches.map((coach) {
-                          Map<String, dynamic> data = coach.data() as Map<String, dynamic>;
-                          return DropdownMenuItem<String>(
-                            value: coach.id,
-                            child: Text(data['name'] ?? data['email'] ?? 'Unknown'),
-                          );
-                        }).toList(),
-                        onChanged: (String? value) {
-                          if (value != null) {
-                            setState(() {
-                              _selectedCoachId = value;
-                            });
-                          }
-                        },
-                        validator: (value) {
-                          if (value == null || value.isEmpty) {
-                            return 'Please select a coach';
-                          }
-                          return null;
-                        },
-                      ),
-                    ],
-                  );
-                },
-              ),
-              const SizedBox(height: 16),
-
-              // 3. Venue Input
-              TextFormField(
-                controller: _venueController,
-                decoration: const InputDecoration(
-                  labelText: "Venue / Location",
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.location_on),
-                ),
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'Please enter a venue';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 16),
-
-              // 4. Date Picker (TextFormField)
-              FormField<DateTime>(
-                initialValue: viewModel.selectedDate,
-                validator: (value) {
-                  if (value == null) return 'Please select a date';
-                  return null;
-                },
-                builder: (FormFieldState<DateTime> state) {
-                  return InkWell(
-                    onTap: () async {
-                      DateTime? picked = await showDatePicker(
-                        context: context,
-                        initialDate: viewModel.selectedDate ?? DateTime.now(),
-                        firstDate: DateTime.now(),
-                        lastDate: DateTime.now().add(const Duration(days: 365)),
-                      );
-                      if (picked != null) {
-                        viewModel.setDate(picked);
-                        state.didChange(picked);
-                      }
-                    },
-                    child: InputDecorator(
-                      decoration: InputDecoration(
-                        labelText: 'Select Date',
-                        border: const OutlineInputBorder(),
-                        prefixIcon: const Icon(Icons.calendar_today, color: AppTheme.primaryRed),
-                        errorText: state.errorText,
-                      ),
-                      child: Text(
-                        viewModel.selectedDate != null
-                            ? "${viewModel.selectedDate!.day}/${viewModel.selectedDate!.month}/${viewModel.selectedDate!.year}"
-                            : '',
+                          // Venue
+                          TextFormField(
+                            controller: _venueController,
+                            decoration: _inputDecoration("Venue / Location", Icons.location_on),
+                            validator: (val) => (val == null || val.isEmpty) ? 'Required' : null,
+                          ),
+                        ],
                       ),
                     ),
-                  );
-                },
-              ),
-              const SizedBox(height: 16),
+                    const SizedBox(height: 24),
 
-              // 5. Time Picker (TextFormField)
-              FormField<TimeOfDay>(
-                initialValue: viewModel.selectedTime,
-                validator: (value) {
-                  if (value == null) return 'Please select a start time';
-                  return null;
-                },
-                builder: (FormFieldState<TimeOfDay> state) {
-                  return InkWell(
-                    onTap: () async {
-                      TimeOfDay? picked = await showTimePicker(
-                        context: context,
-                        initialTime: viewModel.selectedTime ?? const TimeOfDay(hour: 9, minute: 0),
-                      );
-                      if (picked != null) {
-                        viewModel.setTime(picked);
-                        state.didChange(picked);
-                      }
-                    },
-                    child: InputDecorator(
-                      decoration: InputDecoration(
-                        labelText: 'Select Start Time',
-                        border: const OutlineInputBorder(),
-                        prefixIcon: const Icon(Icons.access_time, color: AppTheme.primaryRed),
-                        errorText: state.errorText,
-                      ),
-                      child: Text(
-                        viewModel.selectedTime != null
-                            ? viewModel.selectedTime!.format(context)
-                            : '',
+                    // --- SECTION 3: COACHING STAFF ---
+                    _buildSectionHeader("Staffing", Icons.people_alt),
+                    Container(
+                      padding: const EdgeInsets.all(20),
+                      decoration: _cardDecoration(),
+                      child: StreamBuilder<QuerySnapshot>(
+                        stream: viewModel.getCoaches(),
+                        builder: (context, snapshot) {
+                          if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
+                          
+                          List<DocumentSnapshot> coaches = snapshot.data?.docs ?? [];
+                          
+                          return Column(
+                            children: [
+                              DropdownButtonFormField<String>(
+                                decoration: _inputDecoration("Lead Coach", Icons.person),
+                                value: _selectedLeadCoachId,
+                                icon: const Icon(Icons.keyboard_arrow_down),
+                                items: coaches.map((coach) {
+                                  Map<String, dynamic> data = coach.data() as Map<String, dynamic>;
+                                  return DropdownMenuItem(
+                                    value: coach.id,
+                                    child: Text(data['name'] ?? 'Unknown', overflow: TextOverflow.ellipsis),
+                                  );
+                                }).toList(),
+                                onChanged: (val) => setState(() => _selectedLeadCoachId = val),
+                                validator: (val) => val == null ? 'Required' : null,
+                              ),
+                              const SizedBox(height: 16),
+                              DropdownButtonFormField<String>(
+                                decoration: _inputDecoration("Assistant Coach (Optional)", Icons.person_outline),
+                                value: _selectedAssistantCoachId,
+                                icon: const Icon(Icons.keyboard_arrow_down),
+                                items: [
+                                  const DropdownMenuItem(value: null, child: Text("None")),
+                                  ...coaches.map((coach) {
+                                    Map<String, dynamic> data = coach.data() as Map<String, dynamic>;
+                                    return DropdownMenuItem(
+                                      value: coach.id,
+                                      child: Text(data['name'] ?? 'Unknown', overflow: TextOverflow.ellipsis),
+                                    );
+                                  }),
+                                ],
+                                onChanged: (val) => setState(() => _selectedAssistantCoachId = val),
+                              ),
+                            ],
+                          );
+                        },
                       ),
                     ),
-                  );
-                },
-              ),
-              const SizedBox(height: 32),
+                    const SizedBox(height: 32),
 
-              // 6. Schedule Button
-              SizedBox(
-                width: double.infinity,
-                height: 50,
-                child: ElevatedButton(
-                  onPressed: viewModel.isLoading
-                    ? null
-                    : () async {
-                        // Validate form
-                        if (!_formKey.currentState!.validate()) {
-                          return;
-                        }
+                    // Submit Button
+                    SizedBox(
+                      width: double.infinity,
+                      height: 56,
+                      child: ElevatedButton(
+                        onPressed: viewModel.isLoading ? null : () async {
+                          if (_selectedTemplateId == null) {
+                            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Please select a template"), backgroundColor: Colors.red));
+                            return;
+                          }
+                          if (!_formKey.currentState!.validate()) return;
+                          
+                          if (viewModel.selectedDate == null || viewModel.selectedTime == null) {
+                             ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Date and Time are required"), backgroundColor: Colors.red));
+                             return;
+                          }
 
-                        bool success = await viewModel.scheduleClass(
-                          templateId: _selectedTemplateId!,
-                          coachId: _selectedCoachId!,
-                          venue: _venueController.text.trim(),
-                        );
-
-                        if (success && context.mounted) {
-                          Navigator.pop(context); // Go back to dashboard
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text("Class Scheduled Successfully!"), backgroundColor: Colors.green),
+                          bool success = await viewModel.scheduleClass(
+                            templateId: _selectedTemplateId!,
+                            leadCoachId: _selectedLeadCoachId!,
+                            assistantCoachId: _selectedAssistantCoachId,
+                            venue: _venueController.text.trim(),
                           );
-                        } else if (context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text("Failed to schedule class. Please try again."), backgroundColor: Colors.red),
-                          );
-                        }
-                      },
-                  child: viewModel.isLoading
-                    ? const CircularProgressIndicator(color: Colors.white)
-                    : const Text("Schedule Class", style: TextStyle(fontSize: 16)),
+
+                          if (success && context.mounted) {
+                            Navigator.pop(context);
+                            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Class Scheduled Successfully!"), backgroundColor: Colors.green));
+                          }
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppTheme.primaryRed,
+                          foregroundColor: Colors.white,
+                          elevation: 4,
+                          shadowColor: AppTheme.primaryRed.withOpacity(0.4),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        ),
+                        child: viewModel.isLoading
+                            ? const CircularProgressIndicator(color: Colors.white)
+                            : const Text("Schedule Class", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                      ),
+                    ),
+                    const SizedBox(height: 40),
+                  ],
                 ),
               ),
-            ],
+            ),
           ),
-        ),
+        ],
       ),
+    );
+  }
+
+  // --- Helpers ---
+
+  Widget _buildSectionHeader(String title, IconData icon) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12, left: 4),
+      child: Row(
+        children: [
+          Icon(icon, size: 20, color: AppTheme.primaryRed),
+          const SizedBox(width: 8),
+          Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppTheme.darkText)),
+        ],
+      ),
+    );
+  }
+
+  BoxDecoration _cardDecoration() {
+    return BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(20),
+      boxShadow: [
+        BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4)),
+      ],
+    );
+  }
+
+  InputDecoration _inputDecoration(String label, IconData icon, {String? errorText}) {
+    return InputDecoration(
+      labelText: label,
+      errorText: errorText,
+      filled: true,
+      fillColor: const Color(0xFFFAFAFA),
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: AppTheme.primaryRed)),
+      prefixIcon: Icon(icon, color: Colors.grey[400]),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
     );
   }
 }

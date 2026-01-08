@@ -1,38 +1,173 @@
 import 'package:flutter/foundation.dart';
-import '../models/drill_model.dart';
+import '../models/drill_data.dart';
 import '../services/firestore_service.dart';
+
+/// Extended drill model with session template context
+class TemplateActivity {
+  final String activityId; // Unique ID combining template ID and drill index
+  final String templateId;
+  final String templateTitle;
+  final String ageGroup;
+  final String badgeFocus;
+  final DrillData drillData;
+  final int orderInTemplate;
+  final String? pdfUrl;        // PDF URL if template was created from PDF
+  final String? pdfFileName;   // Original PDF filename
+
+  TemplateActivity({
+    required this.activityId,
+    required this.templateId,
+    required this.templateTitle,
+    required this.ageGroup,
+    required this.badgeFocus,
+    required this.drillData,
+    required this.orderInTemplate,
+    this.pdfUrl,
+    this.pdfFileName,
+  });
+
+  // Infer drill type from title/instructions (intro, warm up, game, technical, etc.)
+  String get drillType {
+    final title = drillData.title.toLowerCase();
+    final instructions = drillData.instructions.toLowerCase();
+    final combined = '$title $instructions';
+
+    if (combined.contains('intro') || combined.contains('muster') || combined.contains('welcome')) {
+      return 'Intro / Muster';
+    } else if (combined.contains('warm up') || combined.contains('warmup')) {
+      return 'Warm Up';
+    } else if (combined.contains('game') || combined.contains('match') || combined.contains('fun')) {
+      return 'Match / Game';
+    } else if (combined.contains('technical') || combined.contains('skill') || combined.contains('ball mastery')) {
+      return 'Technical / Skill';
+    } else {
+      return 'Other';
+    }
+  }
+}
 
 class DrillLibraryViewModel extends ChangeNotifier {
   final FirestoreService _firestoreService = FirestoreService();
-  
-  List<Drill> _allDrills = [];
-  List<Drill> _filteredDrills = [];
+
+  List<TemplateActivity> _allActivities = [];
+  List<TemplateActivity> _filteredActivities = [];
+
+  // Filter states
   String _selectedAgeGroup = 'All';
+  String _selectedBadgeFocus = 'All';
+  String _selectedDrillType = 'All';
+  String _selectedTemplate = 'All';
+  String _searchQuery = '';
+
   bool _isLoading = false;
   String? _errorMessage;
 
   // Getters
-  List<Drill> get allDrills => _allDrills;
-  List<Drill> get filteredDrills => _filteredDrills;
+  List<TemplateActivity> get allActivities => _allActivities;
+  List<TemplateActivity> get filteredActivities => _filteredActivities;
   String get selectedAgeGroup => _selectedAgeGroup;
+  String get selectedBadgeFocus => _selectedBadgeFocus;
+  String get selectedDrillType => _selectedDrillType;
+  String get selectedTemplate => _selectedTemplate;
+  String get searchQuery => _searchQuery;
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
 
-  // Load all drills from Firestore
-  Future<void> loadDrills() async {
+  // Load all activities from session templates (real-time)
+  Stream<List<TemplateActivity>> watchActivities() {
+    return _firestoreService.getSessionTemplates().map((snapshot) {
+      final activities = <TemplateActivity>[];
+
+      for (var doc in snapshot.docs) {
+        final data = doc.data() as Map<String, dynamic>;
+        final templateId = doc.id;
+        final templateTitle = data['title'] ?? 'Untitled Template';
+        final ageGroup = data['ageGroup'] ?? 'Unknown';
+        final badgeFocus = data['badgeFocus'] ?? 'Unknown';
+        final pdfUrl = data['pdfUrl']?.toString();
+        final pdfFileName = data['pdfFileName']?.toString();
+        final drills = data['drills'] as List<dynamic>? ?? [];
+
+        for (int i = 0; i < drills.length; i++) {
+          final drillMap = drills[i] as Map<String, dynamic>;
+          final drillData = DrillData(
+            title: drillMap['title'] ?? 'Untitled Drill',
+            duration: drillMap['duration']?.toString() ?? '5',
+            instructions: drillMap['instructions'] ?? '',
+            equipment: drillMap['equipment'] ?? '',
+            progressionEasier: drillMap['progression_easier'] ?? '',
+            progressionHarder: drillMap['progression_harder'] ?? '',
+            learningGoals: drillMap['learning_goals'] ?? '',
+            animationUrl: drillMap['animationUrl'],
+          );
+
+          activities.add(TemplateActivity(
+            activityId: '${templateId}_$i',
+            templateId: templateId,
+            templateTitle: templateTitle,
+            ageGroup: ageGroup,
+            badgeFocus: badgeFocus,
+            drillData: drillData,
+            orderInTemplate: i + 1,
+            pdfUrl: pdfUrl,
+            pdfFileName: pdfFileName,
+          ));
+        }
+      }
+
+      return activities;
+    });
+  }
+
+  // Load all activities from session templates
+  Future<void> loadActivities() async {
     _isLoading = true;
     _errorMessage = null;
     notifyListeners();
 
     try {
-      final drillMaps = await _firestoreService.getDrills();
-      _allDrills = drillMaps
-          .whereType<Map<String, dynamic>>() // Filter out null documents
-          .map((d) => Drill.fromMap(d))
-          .toList();
+      final snapshot = await _firestoreService.getSessionTemplates().first;
+      _allActivities = [];
 
-      // Apply current filter
-      _applyFilter();
+      for (var doc in snapshot.docs) {
+        final data = doc.data() as Map<String, dynamic>;
+        final templateId = doc.id;
+        final templateTitle = data['title'] ?? 'Untitled Template';
+        final ageGroup = data['ageGroup'] ?? 'Unknown';
+        final badgeFocus = data['badgeFocus'] ?? 'Unknown';
+        final pdfUrl = data['pdfUrl']?.toString();
+        final pdfFileName = data['pdfFileName']?.toString();
+        final drills = data['drills'] as List<dynamic>? ?? [];
+
+        for (int i = 0; i < drills.length; i++) {
+          final drillMap = drills[i] as Map<String, dynamic>;
+          final drillData = DrillData(
+            title: drillMap['title'] ?? 'Untitled Drill',
+            duration: drillMap['duration']?.toString() ?? '5',
+            instructions: drillMap['instructions'] ?? '',
+            equipment: drillMap['equipment'] ?? '',
+            progressionEasier: drillMap['progression_easier'] ?? '',
+            progressionHarder: drillMap['progression_harder'] ?? '',
+            learningGoals: drillMap['learning_goals'] ?? '',
+            animationUrl: drillMap['animationUrl'],
+          );
+
+          _allActivities.add(TemplateActivity(
+            activityId: '${templateId}_$i',
+            templateId: templateId,
+            templateTitle: templateTitle,
+            ageGroup: ageGroup,
+            badgeFocus: badgeFocus,
+            drillData: drillData,
+            orderInTemplate: i + 1,
+            pdfUrl: pdfUrl,
+            pdfFileName: pdfFileName,
+          ));
+        }
+      }
+
+      // Apply current filters
+      _applyFilters();
     } catch (e) {
       _errorMessage = e.toString();
     } finally {
@@ -41,52 +176,88 @@ class DrillLibraryViewModel extends ChangeNotifier {
     }
   }
 
-  // Filter drills based on selected age group
+  // Filter methods
   void setSelectedAgeGroup(String ageGroup) {
     _selectedAgeGroup = ageGroup;
-    _applyFilter();
+    _applyFilters();
     notifyListeners();
   }
 
-  // Apply the current filter to the drills
-  void _applyFilter() {
-    if (_selectedAgeGroup == 'All') {
-      _filteredDrills = _allDrills;
-    } else {
-      _filteredDrills = _allDrills
-          .where((drill) => drill.ageGroup == _selectedAgeGroup)
-          .toList();
-    }
+  void setSelectedBadgeFocus(String badgeFocus) {
+    _selectedBadgeFocus = badgeFocus;
+    _applyFilters();
+    notifyListeners();
   }
 
-  // Get all unique age groups from the drills
+  void setSelectedDrillType(String drillType) {
+    _selectedDrillType = drillType;
+    _applyFilters();
+    notifyListeners();
+  }
+
+  void setSelectedTemplate(String template) {
+    _selectedTemplate = template;
+    _applyFilters();
+    notifyListeners();
+  }
+
+  void setSearchQuery(String query) {
+    _searchQuery = query;
+    _applyFilters();
+    notifyListeners();
+  }
+
+  void resetFilters() {
+    _selectedAgeGroup = 'All';
+    _selectedBadgeFocus = 'All';
+    _selectedDrillType = 'All';
+    _selectedTemplate = 'All';
+    _searchQuery = '';
+    _applyFilters();
+    notifyListeners();
+  }
+
+  // Apply all filters
+  void _applyFilters() {
+    _filteredActivities = _allActivities.where((activity) {
+      bool matchesAgeGroup = _selectedAgeGroup == 'All' || activity.ageGroup == _selectedAgeGroup;
+      bool matchesBadgeFocus = _selectedBadgeFocus == 'All' || activity.badgeFocus == _selectedBadgeFocus;
+      bool matchesDrillType = _selectedDrillType == 'All' || activity.drillType == _selectedDrillType;
+      bool matchesTemplate = _selectedTemplate == 'All' || activity.templateTitle == _selectedTemplate;
+      bool matchesSearch = _searchQuery.isEmpty ||
+          activity.drillData.title.toLowerCase().contains(_searchQuery.toLowerCase());
+
+      return matchesAgeGroup && matchesBadgeFocus && matchesDrillType && matchesTemplate && matchesSearch;
+    }).toList();
+  }
+
+  // Get unique filter options
   List<String> get ageGroups {
-    final ageGroups = _allDrills
-        .map((drill) => drill.ageGroup)
-        .toSet()
-        .toList();
-    
-    // Add 'All' as the first option
-    return ['All', ...ageGroups];
+    final groups = _allActivities.map((a) => a.ageGroup).toSet().toList();
+    groups.sort();
+    return ['All', ...groups];
   }
 
-  // Get drills by category for a specific age group
-  List<Drill> getDrillsByCategory(String category) {
-    return _filteredDrills
-        .where((drill) => drill.category.toLowerCase() == category.toLowerCase())
-        .toList();
+  List<String> get badgeFocuses {
+    final focuses = _allActivities.map((a) => a.badgeFocus).toSet().toList();
+    focuses.sort();
+    return ['All', ...focuses];
   }
 
-  // Get all unique categories from the filtered drills
-  List<String> get categories {
-    return _filteredDrills
-        .map((drill) => drill.category)
-        .toSet()
-        .toList();
+  List<String> get drillTypes {
+    final types = _allActivities.map((a) => a.drillType).toSet().toList();
+    types.sort();
+    return ['All', ...types];
+  }
+
+  List<String> get templateTitles {
+    final titles = _allActivities.map((a) => a.templateTitle).toSet().toList();
+    titles.sort();
+    return ['All', ...titles];
   }
 
   // Refresh data
   Future<void> refresh() async {
-    await loadDrills();
+    await loadActivities();
   }
 }

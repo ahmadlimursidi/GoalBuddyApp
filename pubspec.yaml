@@ -49,6 +49,8 @@ dependencies:
   cupertino_icons: ^1.0.8
   google_generative_ai: ^0.4.7
   file_picker: ^10.3.8
+  url_launcher: ^6.3.1
+  syncfusion_flutter_pdfviewer: ^28.1.33
 
 dev_dependencies:
   flutter_test:
