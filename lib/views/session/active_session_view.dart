@@ -393,7 +393,7 @@ class _ActiveSessionViewState extends State<ActiveSessionView> {
                                 ),
                                 const SizedBox(height: 20),
 
-                                // Tactical Board (Animation) - AI-generated or manual upload
+                                // Tactical Board (Animation) - Only show if animation exists
                                 if ((currentDrill.animationJson != null && currentDrill.animationJson!.isNotEmpty) ||
                                     (currentDrill.animationUrl != null && currentDrill.animationUrl!.isNotEmpty))
                                   Container(
@@ -610,8 +610,13 @@ class _ActiveSessionViewState extends State<ActiveSessionView> {
   }
 
   Widget _buildAnimationDisplay(Drill drill) {
+    debugPrint('🎬 Building animation display for drill: ${drill.title}');
+    debugPrint('   - animationJson length: ${drill.animationJson?.length ?? 0}');
+    debugPrint('   - animationUrl: ${drill.animationUrl ?? "null"}');
+
     // Priority 1: AI-generated animation (animationJson)
     if (drill.animationJson != null && drill.animationJson!.isNotEmpty) {
+      debugPrint('✅ Rendering AI animation');
       try {
         final animationData = DrillAnimationData.fromJson(jsonDecode(drill.animationJson!));
         return DrillAnimationPlayer(
@@ -621,7 +626,7 @@ class _ActiveSessionViewState extends State<ActiveSessionView> {
         );
       } catch (e) {
         // If parsing fails, fall through to other options
-        debugPrint('Failed to parse animation JSON: $e');
+        debugPrint('❌ Failed to parse animation JSON: $e');
       }
     }
 
@@ -664,8 +669,45 @@ class _ActiveSessionViewState extends State<ActiveSessionView> {
       }
     }
 
-    // No animation available
-    return const SizedBox.shrink();
+    // No animation available - show grey placeholder
+    debugPrint('⚪ No animation - showing placeholder');
+    return Container(
+      color: Colors.grey[100],
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.grey[300],
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              Icons.sports_soccer,
+              size: 48,
+              color: Colors.grey[500],
+            ),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            "No Visual Available",
+            style: TextStyle(
+              fontWeight: FontWeight.w600,
+              color: Colors.grey[700],
+              fontSize: 14,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            "Follow instructions below",
+            style: TextStyle(
+              color: Colors.grey[500],
+              fontSize: 12,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildErrorPlaceholder() {

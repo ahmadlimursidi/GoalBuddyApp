@@ -185,6 +185,10 @@ class _DrillFormCardState extends State<DrillFormCard> {
           widget.drill.animationUrl = null;
         });
 
+        debugPrint('✅ Animation generated and saved to drill');
+        debugPrint('📊 Animation JSON length: ${widget.drill.animationJson?.length ?? 0}');
+        debugPrint('🎨 Visual type: ${widget.drill.visualType}');
+
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('✨ Animation generated successfully!'),

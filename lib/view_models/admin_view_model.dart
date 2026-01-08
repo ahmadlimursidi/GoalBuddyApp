@@ -219,6 +219,11 @@ class AdminViewModel extends ChangeNotifier {
 
       // Convert DrillData list to map format for Firestore
       List<Map<String, dynamic>> drillsData = drills.map<Map<String, dynamic>>((drill) {
+        debugPrint('💾 Saving drill: ${drill.title}');
+        debugPrint('   - animationJson length: ${drill.animationJson?.length ?? 0}');
+        debugPrint('   - animationUrl: ${drill.animationUrl ?? "null"}');
+        debugPrint('   - visualType: ${drill.visualType ?? "null"}');
+
         return <String, dynamic>{
           'title': drill.title,
           'duration': drill.duration,
@@ -344,6 +349,11 @@ class AdminViewModel extends ChangeNotifier {
 
       // 4. Convert drills from template to map format
       List<Map<String, dynamic>> drillsData = template.drills.map<Map<String, dynamic>>((drill) {
+        debugPrint('📋 Scheduling drill: ${drill.title}');
+        debugPrint('   - animationJson length: ${drill.animationJson?.length ?? 0}');
+        debugPrint('   - animationUrl: ${drill.animationUrl ?? "null"}');
+        debugPrint('   - visualType: ${drill.visualType ?? "null"}');
+
         return <String, dynamic>{
           'title': drill.title,
           'duration': drill.duration,
@@ -353,6 +363,8 @@ class AdminViewModel extends ChangeNotifier {
           'progression_harder': drill.progressionHarder,
           'learning_goals': drill.learningGoals,
           'animationUrl': drill.animationUrl,
+          'animationJson': drill.animationJson,
+          'visualType': drill.visualType,
         };
       }).toList();
 

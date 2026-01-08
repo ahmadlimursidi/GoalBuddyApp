@@ -5,6 +5,8 @@ import '../../config/theme.dart';
 import '../../view_models/auth_view_model.dart';
 import '../../view_models/student_parent_view_model.dart';
 import '../../widgets/badge_grid.dart'; // Ensure this is imported for the progress tab
+import '../../models/drill_data.dart';
+import '../admin/session_template_details_view.dart';
 
 class StudentParentDashboardView extends StatefulWidget {
   const StudentParentDashboardView({super.key});
@@ -857,7 +859,12 @@ class _StudentParentDashboardViewState extends State<StudentParentDashboardView>
   Widget _buildScheduleCard(BuildContext context, Map<String, dynamic> classData, DateTime startTime, String sessionId) {
     String formattedDate = "${startTime.day}/${startTime.month}/${startTime.year}";
     String formattedTime = "${startTime.hour.toString().padLeft(2, '0')}:${startTime.minute.toString().padLeft(2, '0')}";
-    
+
+    // Debug: Check if templateId exists
+    debugPrint('📅 Session: ${classData['className']}');
+    debugPrint('   - templateId: ${classData['templateId']}');
+    debugPrint('   - Has templateId: ${classData['templateId'] != null}');
+
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
@@ -871,97 +878,235 @@ class _StudentParentDashboardViewState extends State<StudentParentDashboardView>
           ),
         ],
       ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(16),
-          onTap: () {
-            Navigator.pushNamed(
-              context,
-              '/class_details',
-              arguments: {
-                'sessionId': sessionId,
-                'className': classData['className'],
+      child: Column(
+        children: [
+          Material(
+            color: Colors.transparent,
+            child: InkWell(
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(16),
+                topRight: Radius.circular(16),
+              ),
+              onTap: () {
+                Navigator.pushNamed(
+                  context,
+                  '/class_details',
+                  arguments: {
+                    'sessionId': sessionId,
+                    'className': classData['className'],
+                  },
+                );
               },
-            );
-          },
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              children: [
-                // Date Box
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: AppTheme.primaryRed.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Column(
-                    children: [
-                      Text(
-                        "${startTime.day}",
-                        style: const TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                          color: AppTheme.primaryRed,
-                        ),
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Row(
+                  children: [
+                    // Date Box
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: AppTheme.primaryRed.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(12),
                       ),
-                      Text(
-                        _getMonthAbbreviation(startTime.month),
-                        style: const TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                          color: AppTheme.primaryRed,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 16),
-                
-                // Details
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        classData['className'] ?? 'Class',
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: AppTheme.darkText,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const SizedBox(height: 4),
-                      Row(
+                      child: Column(
                         children: [
-                          Icon(Icons.access_time, size: 14, color: Colors.grey[600]),
-                          const SizedBox(width: 4),
-                          Text(formattedTime, style: TextStyle(fontSize: 13, color: Colors.grey[600])),
-                          const SizedBox(width: 12),
-                          Icon(Icons.location_on, size: 14, color: Colors.grey[600]),
-                          const SizedBox(width: 4),
-                          Expanded(
-                            child: Text(
-                              classData['venue'] ?? 'Venue',
-                              style: TextStyle(fontSize: 13, color: Colors.grey[600]),
-                              overflow: TextOverflow.ellipsis,
+                          Text(
+                            "${startTime.day}",
+                            style: const TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                              color: AppTheme.primaryRed,
+                            ),
+                          ),
+                          Text(
+                            _getMonthAbbreviation(startTime.month),
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: AppTheme.primaryRed,
                             ),
                           ),
                         ],
                       ),
-                    ],
-                  ),
+                    ),
+                    const SizedBox(width: 16),
+
+                    // Details
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            classData['className'] ?? 'Class',
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: AppTheme.darkText,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 4),
+                          Row(
+                            children: [
+                              Icon(Icons.access_time, size: 14, color: Colors.grey[600]),
+                              const SizedBox(width: 4),
+                              Text(formattedTime, style: TextStyle(fontSize: 13, color: Colors.grey[600])),
+                              const SizedBox(width: 12),
+                              Icon(Icons.location_on, size: 14, color: Colors.grey[600]),
+                              const SizedBox(width: 4),
+                              Expanded(
+                                child: Text(
+                                  classData['venue'] ?? 'Venue',
+                                  style: TextStyle(fontSize: 13, color: Colors.grey[600]),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    const Icon(Icons.chevron_right, color: Colors.grey),
+                  ],
                 ),
-                const Icon(Icons.chevron_right, color: Colors.grey),
-              ],
+              ),
             ),
           ),
-        ),
+          // View Session Plan button
+          if (classData['templateId'] != null) ...[
+            // Debug: Confirm button is being built
+            Builder(
+              builder: (context) {
+                debugPrint('✅ Building "View Session Plan" button for session');
+                return const SizedBox.shrink();
+              },
+            ),
+            Container(
+              decoration: BoxDecoration(
+                border: Border(
+                  top: BorderSide(color: Colors.grey[200]!, width: 1),
+                ),
+              ),
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  borderRadius: const BorderRadius.only(
+                    bottomLeft: Radius.circular(16),
+                    bottomRight: Radius.circular(16),
+                  ),
+                  onTap: () {
+                    _navigateToSessionTemplate(context, classData['templateId']);
+                  },
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.library_books, size: 16, color: AppTheme.pitchGreen),
+                        const SizedBox(width: 8),
+                        Text(
+                          'View Session Plan',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: AppTheme.pitchGreen,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ],
       ),
     );
+  }
+
+  Future<void> _navigateToSessionTemplate(BuildContext context, String templateId) async {
+    debugPrint('🚀 Navigating to template: $templateId');
+
+    try {
+      // Fetch template details from Firestore
+      debugPrint('📡 Fetching template from Firestore...');
+      final templateDoc = await FirebaseFirestore.instance
+          .collection('session_templates')
+          .doc(templateId)
+          .get();
+
+      debugPrint('📄 Template exists: ${templateDoc.exists}');
+
+      if (!templateDoc.exists) {
+        debugPrint('❌ Template not found in Firestore');
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Session template not found'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        return;
+      }
+
+      final templateData = templateDoc.data() as Map<String, dynamic>;
+      debugPrint('✅ Template data loaded: ${templateData['title']}');
+
+      // Parse drills
+      List<DrillData> drills = [];
+      if (templateData['drills'] != null && templateData['drills'] is List) {
+        for (var drill in templateData['drills']) {
+          if (drill is Map<String, dynamic>) {
+            drills.add(DrillData(
+              title: drill['title']?.toString() ?? '',
+              duration: drill['duration']?.toString() ?? '',
+              instructions: drill['instructions']?.toString() ?? '',
+              equipment: drill['equipment']?.toString() ?? '',
+              progressionEasier: drill['progression_easier']?.toString() ?? '',
+              progressionHarder: drill['progression_harder']?.toString() ?? '',
+              learningGoals: drill['learning_goals']?.toString() ?? '',
+              animationUrl: drill['animationUrl']?.toString(),
+              animationJson: drill['animationJson']?.toString(),
+              visualType: drill['visualType']?.toString(),
+            ));
+          }
+        }
+      }
+
+      debugPrint('📋 Parsed ${drills.length} drills');
+      debugPrint('🎯 About to navigate to SessionTemplateDetailsView');
+
+      if (context.mounted) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => SessionTemplateDetailsView(
+              templateId: templateId,
+              templateTitle: templateData['title']?.toString() ?? 'Session Plan',
+              ageGroup: templateData['ageGroup']?.toString() ?? '',
+              badgeFocus: templateData['badgeFocus']?.toString() ?? '',
+              drills: drills,
+              pdfUrl: templateData['pdfUrl']?.toString(),
+              pdfFileName: templateData['pdfFileName']?.toString(),
+            ),
+          ),
+        );
+        debugPrint('✅ Navigation pushed successfully');
+      } else {
+        debugPrint('⚠️ Context not mounted, skipping navigation');
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error loading session plan: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   Widget _buildStatContainer(String label, String value, IconData icon, Color color) {

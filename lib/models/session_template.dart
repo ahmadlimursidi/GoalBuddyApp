@@ -45,6 +45,10 @@ class SessionTemplate {
     if (data['drills'] != null && data['drills'] is List) {
       for (var drill in data['drills']) {
         if (drill is Map<String, dynamic>) {
+          print('🔄 Loading drill from Firestore: ${drill['title']}');
+          print('   - animationJson present: ${drill['animationJson'] != null}');
+          print('   - animationJson length: ${drill['animationJson']?.toString().length ?? 0}');
+
           drills.add(DrillData(
             title: drill['title']?.toString() ?? '',
             duration: drill['duration']?.toString() ?? '',
@@ -54,6 +58,8 @@ class SessionTemplate {
             progressionHarder: drill['progression_harder']?.toString() ?? '',
             learningGoals: drill['learning_goals']?.toString() ?? '',
             animationUrl: drill['animationUrl']?.toString(),
+            animationJson: drill['animationJson']?.toString(),
+            visualType: drill['visualType']?.toString(),
           ));
         }
       }
@@ -88,6 +94,8 @@ class SessionTemplate {
           'progression_harder': drill.progressionHarder,
           'learning_goals': drill.learningGoals,
           'animationUrl': drill.animationUrl,
+          'animationJson': drill.animationJson,
+          'visualType': drill.visualType,
         };
       }).toList(),
       'createdAt': createdAt,

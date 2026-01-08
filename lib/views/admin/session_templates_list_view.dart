@@ -123,6 +123,8 @@ class SessionTemplatesListView extends StatelessWidget {
                         progressionHarder: drillMap['progression_harder'] ?? '',
                         learningGoals: drillMap['learning_goals'] ?? '',
                         animationUrl: drillMap['animationUrl'],
+                        animationJson: drillMap['animationJson'],
+                        visualType: drillMap['visualType'],
                       );
                     }).toList();
 

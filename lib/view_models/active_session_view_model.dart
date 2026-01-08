@@ -125,10 +125,16 @@ class ActiveSessionViewModel extends ChangeNotifier {
 
       // Check if drills are embedded in the session
       if (sessionData['drills'] != null && sessionData['drills'] is List) {
+        debugPrint('📥 Loading drills from embedded session data');
         // Load drills directly from the session
         _drills = (sessionData['drills'] as List).asMap().entries.map((entry) {
           int index = entry.key;
           Map<String, dynamic> drillData = entry.value as Map<String, dynamic>;
+
+          debugPrint('📥 Loading drill ${index + 1}: ${drillData['title']}');
+          debugPrint('   - animationJson length: ${drillData['animationJson']?.toString().length ?? 0}');
+          debugPrint('   - animationUrl: ${drillData['animationUrl'] ?? "null"}');
+          debugPrint('   - visualType: ${drillData['visualType'] ?? "null"}');
 
           return Drill(
             id: "drill_$index",
@@ -150,6 +156,7 @@ class ActiveSessionViewModel extends ChangeNotifier {
         }).toList();
       } else {
         // Fallback: Load from template if drills are not embedded
+        debugPrint('📥 Loading drills from template (fallback)');
         String? templateId = sessionData['templateId'];
         if (templateId == null) {
           throw Exception("No drills found and no template ID in session");
@@ -167,6 +174,12 @@ class ActiveSessionViewModel extends ChangeNotifier {
         _drills = template.drills.asMap().entries.map((entry) {
           int index = entry.key;
           DrillData drillData = entry.value;
+
+          debugPrint('📥 Loading drill ${index + 1} from template: ${drillData.title}');
+          debugPrint('   - animationJson length: ${drillData.animationJson?.length ?? 0}');
+          debugPrint('   - animationUrl: ${drillData.animationUrl ?? "null"}');
+          debugPrint('   - visualType: ${drillData.visualType ?? "null"}');
+
           return Drill(
             id: "drill_$index",
             title: drillData.title,
