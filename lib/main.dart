@@ -51,25 +51,20 @@ Future<void> main() async {
     debugPrint('FlutterError caught by FlutterError.onError: ${details.exceptionAsString()}');
   };
 
-  runZonedGuarded(() {
-    runApp(
-      MultiProvider(
-        providers: [
-          ChangeNotifierProvider(create: (_) => AuthViewModel()),
-          ChangeNotifierProvider(create: (_) => DashboardViewModel()),
-          ChangeNotifierProvider(create: (_) => ActiveSessionViewModel()),
-          ChangeNotifierProvider(create: (_) => AdminViewModel()),
-          ChangeNotifierProvider(create: (_) => StudentParentViewModel()), // Add student/parent view model
-          ChangeNotifierProvider(create: (_) => AttendanceViewModel()), // Add attendance view model
-          ChangeNotifierProvider(create: (_) => DrillLibraryViewModel()), // Add drill library view model
-        ],
-        child: const MyApp(),
-      ),
-    );
-  }, (error, stack) {
-    debugPrint('Uncaught error: $error');
-    debugPrintStack(stackTrace: stack);
-  });
+  runApp(
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => AuthViewModel()),
+        ChangeNotifierProvider(create: (_) => DashboardViewModel()),
+        ChangeNotifierProvider(create: (_) => ActiveSessionViewModel()),
+        ChangeNotifierProvider(create: (_) => AdminViewModel()),
+        ChangeNotifierProvider(create: (_) => StudentParentViewModel()), // Add student/parent view model
+        ChangeNotifierProvider(create: (_) => AttendanceViewModel()), // Add attendance view model
+        ChangeNotifierProvider(create: (_) => DrillLibraryViewModel()), // Add drill library model
+      ],
+      child: const MyApp(),
+    ),
+  );
 }
 
 class MyApp extends StatelessWidget {
@@ -78,7 +73,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'GOALBUDDY',
+      title: 'GoalBuddy',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
 
@@ -126,9 +121,9 @@ class ClassDetailsWrapper extends StatelessWidget {
   final String sessionId;
 
   const ClassDetailsWrapper({
-    Key? key,
+    super.key,
     required this.sessionId,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {

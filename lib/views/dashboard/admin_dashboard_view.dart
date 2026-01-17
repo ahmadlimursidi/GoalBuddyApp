@@ -716,7 +716,7 @@ class _AdminDashboardViewState extends State<AdminDashboardView> {
                       return Column(
                         children: [
                           DropdownButtonFormField<String>(
-                            value: selectedLeadCoachId,
+                            initialValue: selectedLeadCoachId,
                             decoration: const InputDecoration(
                               labelText: 'Lead Coach',
                               border: OutlineInputBorder(),
@@ -737,7 +737,7 @@ class _AdminDashboardViewState extends State<AdminDashboardView> {
                           ),
                           const SizedBox(height: 16),
                           DropdownButtonFormField<String>(
-                            value: selectedAssistantCoachId,
+                            initialValue: selectedAssistantCoachId,
                             decoration: const InputDecoration(
                               labelText: 'Assistant Coach (Optional)',
                               border: OutlineInputBorder(),
@@ -869,19 +869,39 @@ class _AdminDashboardViewState extends State<AdminDashboardView> {
           ),
           ElevatedButton(
             onPressed: () async {
+              // Show loading indicator
+              showDialog(
+                context: context,
+                barrierDismissible: false,
+                builder: (context) => const Center(
+                  child: CircularProgressIndicator(color: AppTheme.primaryRed),
+                ),
+              );
+
               try {
                 await _firestoreService.deleteSession(classId);
 
                 if (context.mounted) {
+                  // Close loading indicator
+                  Navigator.pop(context);
+                  // Close delete confirmation dialog
                   Navigator.pop(context);
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Class deleted successfully')),
+                    const SnackBar(
+                      content: Text('Class deleted successfully'),
+                      backgroundColor: AppTheme.pitchGreen,
+                    ),
                   );
                 }
               } catch (e) {
                 if (context.mounted) {
+                  // Close loading indicator
+                  Navigator.pop(context);
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Error deleting class: $e')),
+                    SnackBar(
+                      content: Text('Error deleting class: $e'),
+                      backgroundColor: Colors.red,
+                    ),
                   );
                 }
               }

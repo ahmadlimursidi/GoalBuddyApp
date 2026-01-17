@@ -8,8 +8,12 @@ class DashboardViewModel extends ChangeNotifier {
   final AuthService _authService = AuthService(); // Need this to get current User ID
 
   Stream<QuerySnapshot>? _sessionsStream;
+  Stream<QuerySnapshot>? _assistantSessionsStream;
 
   Stream<QuerySnapshot>? get sessionsStream => _sessionsStream;
+  Stream<QuerySnapshot>? get assistantSessionsStream => _assistantSessionsStream;
+
+  String? get currentUserId => _authService.currentUser?.uid;
 
   DashboardViewModel() {
     _init();
@@ -18,8 +22,10 @@ class DashboardViewModel extends ChangeNotifier {
   void _init() {
     String? userId = _authService.currentUser?.uid;
     if (userId != null) {
-      // Fetch sessions assigned to THIS coach
+      // Fetch sessions assigned to THIS coach as lead
       _sessionsStream = _firestoreService.getCoachSessions(userId);
+      // Fetch sessions assigned to THIS coach as assistant
+      _assistantSessionsStream = _firestoreService.getAssistantCoachSessions(userId);
       notifyListeners();
     }
   }
@@ -27,8 +33,10 @@ class DashboardViewModel extends ChangeNotifier {
   void refreshDashboard() {
     String? userId = _authService.currentUser?.uid;
     if (userId != null) {
-      // Refresh sessions assigned to THIS coach
+      // Refresh sessions assigned to THIS coach as lead
       _sessionsStream = _firestoreService.getCoachSessions(userId);
+      // Refresh sessions assigned to THIS coach as assistant
+      _assistantSessionsStream = _firestoreService.getAssistantCoachSessions(userId);
       notifyListeners();
     }
   }

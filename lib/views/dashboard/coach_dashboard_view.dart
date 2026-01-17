@@ -16,6 +16,9 @@ class CoachDashboardView extends StatefulWidget {
 }
 
 class _CoachDashboardViewState extends State<CoachDashboardView> {
+  // Light blue color for assistant coach sessions
+  static const Color assistantBlue = Color(0xFF42A5F5);
+
   @override
   void initState() {
     super.initState();
@@ -38,21 +41,69 @@ class _CoachDashboardViewState extends State<CoachDashboardView> {
         ? const Center(child: CircularProgressIndicator(color: AppTheme.primaryRed))
         : StreamBuilder<QuerySnapshot>(
             stream: viewModel.sessionsStream,
-            builder: (context, snapshot) {
+            builder: (context, leadSnapshot) {
+              // Also listen to assistant sessions
+              return StreamBuilder<QuerySnapshot>(
+                stream: viewModel.assistantSessionsStream,
+                builder: (context, assistantSnapshot) {
 
-              if (snapshot.hasError) {
-                return Center(child: Text("Error: ${snapshot.error}"));
+              if (leadSnapshot.hasError) {
+                return Center(child: Text("Error: ${leadSnapshot.error}"));
               }
 
-              if (snapshot.connectionState == ConnectionState.waiting) {
+              if (assistantSnapshot.hasError) {
+                print('DEBUG: Assistant snapshot error: ${assistantSnapshot.error}');
+              }
+
+              if (leadSnapshot.connectionState == ConnectionState.waiting) {
                 return const Center(child: CircularProgressIndicator(color: AppTheme.primaryRed));
               }
 
-              final docs = snapshot.data?.docs ?? [];
+              // Debug connection states
+              print('DEBUG: Lead snapshot state: ${leadSnapshot.connectionState}');
+              print('DEBUG: Assistant snapshot state: ${assistantSnapshot.connectionState}');
+
+              final leadDocs = leadSnapshot.data?.docs ?? [];
+              final assistantDocs = assistantSnapshot.data?.docs ?? [];
+
+              // Debug logging
+              print('DEBUG: Lead coach sessions count: ${leadDocs.length}');
+              print('DEBUG: Assistant coach sessions count: ${assistantDocs.length}');
+              print('DEBUG: Current user ID: ${viewModel.currentUserId}');
+
+              for (var doc in assistantDocs) {
+                final data = doc.data() as Map<String, dynamic>;
+                print('DEBUG: Assistant session - ID: ${doc.id}, assistantCoachId: ${data['assistantCoachId']}, className: ${data['className']}');
+              }
+
+              // Combine and deduplicate sessions (in case same session appears in both)
+              final Map<String, MapEntry<DocumentSnapshot, bool>> sessionMap = {};
+              for (var doc in leadDocs) {
+                sessionMap[doc.id] = MapEntry(doc, false); // false = lead coach
+              }
+              for (var doc in assistantDocs) {
+                if (!sessionMap.containsKey(doc.id)) {
+                  sessionMap[doc.id] = MapEntry(doc, true); // true = assistant coach
+                }
+              }
+
+              final allSessions = sessionMap.values.toList();
+
+              // Sort by start time
+              allSessions.sort((a, b) {
+                final aData = a.key.data() as Map<String, dynamic>;
+                final bData = b.key.data() as Map<String, dynamic>;
+                final aTime = aData['startTime'] as Timestamp?;
+                final bTime = bData['startTime'] as Timestamp?;
+                if (aTime == null && bTime == null) return 0;
+                if (aTime == null) return 1;
+                if (bTime == null) return -1;
+                return aTime.compareTo(bTime);
+              });
 
               // Count only upcoming (non-completed) sessions
-              final upcomingCount = docs.where((doc) {
-                final data = doc.data() as Map<String, dynamic>;
+              final upcomingCount = allSessions.where((entry) {
+                final data = entry.key.data() as Map<String, dynamic>;
                 final status = (data['status'] ?? '').toString().toUpperCase();
                 return status != 'COMPLETED';
               }).length;
@@ -185,13 +236,13 @@ class _CoachDashboardViewState extends State<CoachDashboardView> {
               ),
 
               // 2. Body Content
-              if (docs.isEmpty)
+              if (allSessions.isEmpty)
                 SliverPadding(
                   padding: const EdgeInsets.all(20),
                   sliver: SliverToBoxAdapter(child: _buildEmptyState(context)),
                 ),
 
-              if (docs.isNotEmpty) ...[
+              if (allSessions.isNotEmpty) ...[
                 SliverPadding(
                   padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
                   sliver: const SliverToBoxAdapter(
@@ -205,8 +256,13 @@ class _CoachDashboardViewState extends State<CoachDashboardView> {
                   padding: const EdgeInsets.symmetric(horizontal: 20),
                   sliver: SliverList(
                     delegate: SliverChildBuilderDelegate(
-                      (context, index) => _buildClassCard(context, docs[index]),
-                      childCount: docs.length,
+                      (context, index) {
+                        final entry = allSessions[index];
+                        final doc = entry.key;
+                        final isAssistant = entry.value;
+                        return _buildClassCard(context, doc, isAssistant: isAssistant);
+                      },
+                      childCount: allSessions.length,
                     ),
                   ),
                 ),
@@ -272,9 +328,10 @@ class _CoachDashboardViewState extends State<CoachDashboardView> {
               const SliverToBoxAdapter(child: SizedBox(height: 40)),
             ],
           );
+                },
+              );
         },
       ),
-
     );
   }
 
@@ -312,11 +369,14 @@ class _CoachDashboardViewState extends State<CoachDashboardView> {
     );
   }
 
-  Widget _buildClassCard(BuildContext context, DocumentSnapshot doc) {
+  Widget _buildClassCard(BuildContext context, DocumentSnapshot doc, {bool isAssistant = false}) {
     final data = doc.data() as Map<String, dynamic>;
     final startTime = data['startTime'] as Timestamp?;
     final now = Timestamp.now();
     final status = (data['status'] ?? '').toString().toUpperCase();
+
+    // Light blue color for assistant coach sessions
+    final Color accentColor = isAssistant ? assistantBlue : AppTheme.primaryRed;
 
     // Logic for Highlighting "Next" Class
     bool isNext = false;
@@ -347,6 +407,12 @@ class _CoachDashboardViewState extends State<CoachDashboardView> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: isAssistant
+              ? assistantBlue.withOpacity(0.3)
+              : AppTheme.primaryRed.withOpacity(0.3),
+          width: 2,
+        ),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.05),
@@ -374,7 +440,7 @@ class _CoachDashboardViewState extends State<CoachDashboardView> {
                         color: isCompleted
                             ? AppTheme.pitchGreen.withOpacity(0.15)
                             : isNext
-                                ? AppTheme.pitchGreen.withOpacity(0.1)
+                                ? (isAssistant ? assistantBlue.withOpacity(0.1) : AppTheme.pitchGreen.withOpacity(0.1))
                                 : Colors.grey[100],
                         borderRadius: BorderRadius.circular(12),
                       ),
@@ -385,7 +451,7 @@ class _CoachDashboardViewState extends State<CoachDashboardView> {
                             style: TextStyle(
                               fontSize: 12,
                               fontWeight: FontWeight.bold,
-                              color: isCompleted || isNext ? AppTheme.pitchGreen : Colors.grey,
+                              color: isCompleted ? AppTheme.pitchGreen : (isNext ? (isAssistant ? assistantBlue : AppTheme.pitchGreen) : Colors.grey),
                             ),
                           ),
                           const SizedBox(height: 4),
@@ -399,26 +465,54 @@ class _CoachDashboardViewState extends State<CoachDashboardView> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          if (isCompleted)
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                              margin: const EdgeInsets.only(bottom: 6),
-                              decoration: BoxDecoration(
-                                color: AppTheme.pitchGreen,
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                              child: const Text("COMPLETED", style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
-                            )
-                          else if (isNext)
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                              margin: const EdgeInsets.only(bottom: 6),
-                              decoration: BoxDecoration(
-                                color: AppTheme.pitchGreen,
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                              child: const Text("UPCOMING", style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
-                            ),
+                          // Role badge row
+                          Row(
+                            children: [
+                              if (isCompleted)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                  margin: const EdgeInsets.only(bottom: 6, right: 6),
+                                  decoration: BoxDecoration(
+                                    color: AppTheme.pitchGreen,
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: const Text("COMPLETED", style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                                )
+                              else if (isNext)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                  margin: const EdgeInsets.only(bottom: 6, right: 6),
+                                  decoration: BoxDecoration(
+                                    color: isAssistant ? assistantBlue : AppTheme.pitchGreen,
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: const Text("UPCOMING", style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                                ),
+                              // Role badge - LEAD or ASSISTANT
+                              if (isAssistant)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                  margin: const EdgeInsets.only(bottom: 6),
+                                  decoration: BoxDecoration(
+                                    color: assistantBlue.withOpacity(0.15),
+                                    borderRadius: BorderRadius.circular(4),
+                                    border: Border.all(color: assistantBlue.withOpacity(0.5)),
+                                  ),
+                                  child: Text("ASSISTANT", style: TextStyle(color: assistantBlue, fontSize: 10, fontWeight: FontWeight.bold)),
+                                )
+                              else
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                  margin: const EdgeInsets.only(bottom: 6),
+                                  decoration: BoxDecoration(
+                                    color: AppTheme.primaryRed.withOpacity(0.15),
+                                    borderRadius: BorderRadius.circular(4),
+                                    border: Border.all(color: AppTheme.primaryRed.withOpacity(0.5)),
+                                  ),
+                                  child: const Text("LEAD", style: TextStyle(color: AppTheme.primaryRed, fontSize: 10, fontWeight: FontWeight.bold)),
+                                ),
+                            ],
+                          ),
                           Text(
                             data['className'] ?? 'Unknown Class',
                             style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppTheme.darkText),
@@ -444,7 +538,7 @@ class _CoachDashboardViewState extends State<CoachDashboardView> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    _buildInfoChip(Icons.access_time_filled_rounded, timeString, isCompleted ? AppTheme.pitchGreen : isNext ? AppTheme.primaryRed : Colors.grey),
+                    _buildInfoChip(Icons.access_time_filled_rounded, timeString, isCompleted ? AppTheme.pitchGreen : isNext ? accentColor : Colors.grey),
                     _buildInfoChip(Icons.location_on_rounded, data['venue'] ?? 'Unknown', Colors.grey),
 
                     // Action Arrow / Checkmark
@@ -454,7 +548,7 @@ class _CoachDashboardViewState extends State<CoachDashboardView> {
                         color: isCompleted
                             ? AppTheme.pitchGreen
                             : isNext
-                                ? AppTheme.primaryRed
+                                ? accentColor
                                 : Colors.grey[100],
                         shape: BoxShape.circle,
                       ),

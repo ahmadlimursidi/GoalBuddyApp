@@ -321,7 +321,7 @@ class _StudentProfileViewState extends State<StudentProfileView> {
                 FutureBuilder<DocumentSnapshot>(
                   future: FirebaseFirestore.instance.collection('students').doc(_student?.id).get(),
                   builder: (context, snapshot) {
-                    String ageInfo = "${_studentProgress?.ageGroup ?? 'Junior Kickers'}";
+                    String ageInfo = _studentProgress?.ageGroup ?? 'Junior Kickers';
                     
                     if (snapshot.hasData && snapshot.data!.exists) {
                       final data = snapshot.data!.data() as Map<String, dynamic>?;

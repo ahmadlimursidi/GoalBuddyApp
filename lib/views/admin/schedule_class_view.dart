@@ -315,7 +315,7 @@ class _ScheduleClassViewState extends State<ScheduleClassView> {
                             children: [
                               DropdownButtonFormField<String>(
                                 decoration: _inputDecoration("Lead Coach", Icons.person),
-                                value: _selectedLeadCoachId,
+                                initialValue: _selectedLeadCoachId,
                                 icon: const Icon(Icons.keyboard_arrow_down),
                                 items: coaches.map((coach) {
                                   Map<String, dynamic> data = coach.data() as Map<String, dynamic>;
@@ -330,7 +330,7 @@ class _ScheduleClassViewState extends State<ScheduleClassView> {
                               const SizedBox(height: 16),
                               DropdownButtonFormField<String>(
                                 decoration: _inputDecoration("Assistant Coach (Optional)", Icons.person_outline),
-                                value: _selectedAssistantCoachId,
+                                initialValue: _selectedAssistantCoachId,
                                 icon: const Icon(Icons.keyboard_arrow_down),
                                 items: [
                                   const DropdownMenuItem(value: null, child: Text("None")),

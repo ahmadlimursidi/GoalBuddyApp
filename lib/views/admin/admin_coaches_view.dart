@@ -54,7 +54,6 @@ class _AdminCoachesViewState extends State<AdminCoachesView> {
         phone: _phoneController.text.trim(),
         password: _passwordController.text.trim(),
         ratePerHour: double.parse(_rateController.text.trim()),
-        role: 'Assistant', // Default role for newly added coaches
       );
 
       if (success && mounted) {

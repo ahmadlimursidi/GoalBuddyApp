@@ -84,4 +84,50 @@ class StorageService {
       return null;
     }
   }
+
+  /// Uploads a payment receipt (image or PDF) to Firebase Storage
+  /// Returns the download URL if successful
+  Future<String?> uploadPaymentReceipt({
+    required Uint8List fileBytes,
+    required String studentId,
+    required String monthYear,
+    required String fileName,
+    required String contentType,
+  }) async {
+    try {
+      // Create a unique file path: receipts/studentId/monthYear_timestamp.extension
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      final String sanitizedMonth = monthYear.replaceAll(' ', '_');
+      final String path = 'receipts/$studentId/${sanitizedMonth}_${timestamp}_$fileName';
+
+      // Upload the file bytes to Firebase Storage
+      final UploadTask uploadTask = _storage.ref(path).putData(
+        fileBytes,
+        SettableMetadata(contentType: contentType),
+      );
+
+      // Wait for upload to complete
+      final TaskSnapshot snapshot = await uploadTask;
+
+      // Get the download URL
+      String downloadUrl = await snapshot.ref.getDownloadURL();
+
+      print("✅ Receipt uploaded successfully to: $path");
+      return downloadUrl;
+    } catch (e) {
+      print("❌ Error uploading receipt: $e");
+      return null;
+    }
+  }
+
+  /// Deletes a receipt file from Firebase Storage given its download URL
+  Future<void> deleteReceiptByUrl(String downloadUrl) async {
+    try {
+      final ref = _storage.refFromURL(downloadUrl);
+      await ref.delete();
+      print("✅ Receipt deleted successfully");
+    } catch (e) {
+      print("❌ Error deleting receipt: $e");
+    }
+  }
 }

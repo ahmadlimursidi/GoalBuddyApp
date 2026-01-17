@@ -2,7 +2,6 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:lottie/lottie.dart';
 import '../../services/firestore_service.dart';
 import '../../utils/age_calculator.dart';
 import '../../config/theme.dart';
@@ -390,9 +389,12 @@ class _AdminStudentsViewState extends State<AdminStudentsView> {
                   children: [
                     const Icon(Icons.school, color: AppTheme.pitchGreen),
                     const SizedBox(width: 12),
-                    Text(
-                      'Assigned Group: $_selectedAgeGroup',
-                      style: const TextStyle(fontWeight: FontWeight.bold, color: AppTheme.pitchGreen),
+                    Expanded(
+                      child: Text(
+                        'Assigned Group: $_selectedAgeGroup',
+                        style: const TextStyle(fontWeight: FontWeight.bold, color: AppTheme.pitchGreen),
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
                   ],
                 ),

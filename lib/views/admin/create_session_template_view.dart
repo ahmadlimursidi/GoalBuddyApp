@@ -854,7 +854,7 @@ class _CreateSessionTemplateViewState extends State<CreateSessionTemplateView> {
                           _buildTextField(_titleController, "Template Title", Icons.title),
                           const SizedBox(height: 16),
                           DropdownButtonFormField<String>(
-                            value: _selectedAgeGroup,
+                            initialValue: _selectedAgeGroup,
                             decoration: _inputDecoration("Age Group", Icons.group),
                             items: ageGroups.map((g) => DropdownMenuItem(value: g, child: Text(g))).toList(),
                             onChanged: (v) => setState(() => _selectedAgeGroup = v),

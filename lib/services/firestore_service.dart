@@ -11,13 +11,24 @@ class FirestoreService {
   // 📅 DASHBOARD & SESSIONS
   // ==============================================================================
 
-  /// Get all classes assigned to a specific coach
+  /// Get all classes assigned to a specific coach (as lead or assistant)
   Stream<QuerySnapshot> getCoachSessions(String coachId) {
+    // Query sessions where the coach is either the lead coach or assistant coach
+    // Using coachId field for backward compatibility
     return _db
         .collection('sessions')
         .where('coachId', isEqualTo: coachId)
-        .orderBy('startTime') // Sort by time (e.g., 9:00 AM, 10:00 AM)
-        .snapshots(); // 'snapshots' gives us a real-time stream (Live updates)
+        .orderBy('startTime')
+        .snapshots();
+  }
+
+  /// Get sessions where coach is assigned as assistant
+  Stream<QuerySnapshot> getAssistantCoachSessions(String coachId) {
+    return _db
+        .collection('sessions')
+        .where('assistantCoachId', isEqualTo: coachId)
+        .orderBy('startTime')
+        .snapshots();
   }
 
   // ==============================================================================
@@ -212,7 +223,6 @@ class FirestoreService {
     required String phone,
     required String password,
     required double ratePerHour,
-    required String role, // 'Lead' or 'Assistant'
   }) async {
     try {
       // Check if email already exists in Firebase Auth first
@@ -225,14 +235,14 @@ class FirestoreService {
         String coachId = userCredential.user!.uid;
 
         // Create user profile document in Firestore
+        // Note: coachRole is NOT set here - coaches are assigned as Lead/Assistant per session
         await _db.collection('users').doc(coachId).set({
           'name': name,
           'email': email,
           'phone': phone,
-          'role': 'coach', // Fixed role for coaches
-          'coachRole': role, // 'Lead' or 'Assistant'
+          'role': 'coach', // User type role (coach vs admin vs parent)
           'ratePerHour': ratePerHour,
-          'assignedClasses': [], // Will be populated later
+          'assignedClasses': [], // Will be populated when assigned to sessions
           'createdAt': FieldValue.serverTimestamp(),
           'lastUpdated': FieldValue.serverTimestamp(),
         });
@@ -357,7 +367,7 @@ class FirestoreService {
           print("Error creating parent auth account: ${e.code} - ${e.message}");
           // If auth creation fails, we can't create a proper parent account
           // The parent won't be able to sign in without an auth account
-          throw e; // Re-throw to indicate failure
+          rethrow; // Re-throw to indicate failure
         }
       } else {
         // Update existing parent account with new student info
@@ -870,9 +880,26 @@ class FirestoreService {
         .snapshots();
   }
 
-  /// Delete a session permanently
+  /// Delete a session permanently (including any subcollections)
   Future<void> deleteSession(String sessionId) async {
     try {
+      // First, delete any students subcollection documents
+      QuerySnapshot studentsSnapshot = await _db
+          .collection('sessions')
+          .doc(sessionId)
+          .collection('students')
+          .get();
+
+      if (studentsSnapshot.docs.isNotEmpty) {
+        WriteBatch batch = _db.batch();
+        for (QueryDocumentSnapshot studentDoc in studentsSnapshot.docs) {
+          batch.delete(studentDoc.reference);
+        }
+        await batch.commit();
+        print('Deleted ${studentsSnapshot.docs.length} student records from session $sessionId');
+      }
+
+      // Then delete the session document itself
       await _db.collection('sessions').doc(sessionId).delete();
       print('Session $sessionId deleted successfully');
     } catch (e) {

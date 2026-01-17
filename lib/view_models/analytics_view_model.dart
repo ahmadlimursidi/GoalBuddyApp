@@ -204,10 +204,6 @@ class AnalyticsViewModel extends ChangeNotifier {
     return Colors.red;
   }
 
-  @override
-  void dispose() {
-    super.dispose();
-  }
 }
 
 class AttendanceData {

@@ -72,8 +72,8 @@ class _LoginViewState extends State<LoginView> with SingleTickerProviderStateMix
                       opacity: _fadeAnimation,
                       child: Transform.rotate(
                         angle: 1.5708, // 90 degrees in radians (π/2)
-                        child: Lottie.network(
-                          'https://lottie.host/11dd4ab7-53d3-480f-884e-469a2c61b3bd/RNR5VSgfz5.json',
+                        child: Lottie.asset(
+                          'assets/animations/soccer_ball_login.json',
                           width: 150,
                           height: 150,
                           fit: BoxFit.contain,
@@ -186,8 +186,8 @@ class _LoginViewState extends State<LoginView> with SingleTickerProviderStateMix
                           }
                         },
                     child: authViewModel.isLoading
-                        ? Lottie.network(
-                            'https://lottie.host/6807242f-8d6a-4102-a3f0-9a01fa8b3ef2/3SY7jwapQ2.json',
+                        ? Lottie.asset(
+                            'assets/animations/loading_spinner.json',
                             width: 30,
                             height: 30,
                             fit: BoxFit.contain,

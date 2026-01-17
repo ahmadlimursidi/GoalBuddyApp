@@ -14,13 +14,70 @@ class BadgeGrid extends StatelessWidget {
     this.currentBadgeId,
   });
 
+  // Normalize age group names to match badge data
+  String _normalizeAgeGroup(String ageGroup) {
+    String normalized = ageGroup.toLowerCase().trim();
+
+    // Map common variations to the exact names used in badge_data.dart
+    if (normalized.contains('little') && normalized.contains('kick')) {
+      return 'Little Kicks';
+    } else if (normalized.contains('junior') && normalized.contains('kick')) {
+      return 'Junior Kickers';
+    } else if (normalized.contains('mighty') && normalized.contains('kick')) {
+      return 'Mighty Kickers';
+    } else if (normalized.contains('mega') && normalized.contains('kick')) {
+      return 'Mega Kickers';
+    }
+
+    // Return original if no match found
+    return ageGroup;
+  }
+
+  // Get badges for this level and all previous levels
+  List<Badge> _getBadgesForLevel(String normalizedAgeGroup) {
+    List<String> ageGroupOrder = [
+      'Little Kicks',
+      'Junior Kickers',
+      'Mighty Kickers',
+      'Mega Kickers',
+    ];
+
+    int currentIndex = ageGroupOrder.indexOf(normalizedAgeGroup);
+    if (currentIndex == -1) {
+      // If not found, just filter by exact match
+      return allBadges.where((badge) => badge.ageGroup == normalizedAgeGroup).toList();
+    }
+
+    // Get all badges up to and including current level
+    List<String> applicableGroups = ageGroupOrder.sublist(0, currentIndex + 1);
+    return allBadges.where((badge) => applicableGroups.contains(badge.ageGroup)).toList();
+  }
+
   @override
   Widget build(BuildContext context) {
     // Filter badges by age group (defensive: handle unexpected allBadges content)
+    // Also handle age group name variations
     List<Badge> filteredBadges;
     try {
-      filteredBadges = allBadges.where((badge) => badge.ageGroup == ageGroup).toList();
+      // Normalize age group name for matching
+      String normalizedAgeGroup = _normalizeAgeGroup(ageGroup);
+
+      print('DEBUG BadgeGrid: ageGroup input = $ageGroup');
+      print('DEBUG BadgeGrid: normalized ageGroup = $normalizedAgeGroup');
+      print('DEBUG BadgeGrid: earnedBadgeIds = $earnedBadgeIds');
+      print('DEBUG BadgeGrid: currentBadgeId = $currentBadgeId');
+      print('DEBUG BadgeGrid: allBadges count = ${allBadges.length}');
+
+      // Get badges for this age group and all previous levels
+      filteredBadges = _getBadgesForLevel(normalizedAgeGroup);
+
+      print('DEBUG BadgeGrid: filteredBadges count = ${filteredBadges.length}');
+      for (var badge in filteredBadges) {
+        bool isEarned = earnedBadgeIds.contains(badge.id);
+        print('DEBUG BadgeGrid: badge.id = ${badge.id}, isEarned = $isEarned');
+      }
     } catch (e) {
+      print('DEBUG BadgeGrid: ERROR = $e');
       filteredBadges = <Badge>[];
     }
 
@@ -112,61 +169,74 @@ class BadgeItem extends StatelessWidget {
           ),
         ],
       ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          // Badge icon
-          Icon(
-            getIconData(badge.iconAsset),
-            size: 40,
-            color: displayColor,
-          ),
-          const SizedBox(height: 8),
-          // Badge title
-          Text(
-            badge.title,
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w500,
-              color: isEarned ? Colors.black87 : Colors.grey[600],
+      child: Padding(
+        padding: const EdgeInsets.all(6),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Badge icon
+            Icon(
+              getIconData(badge.iconAsset),
+              size: 32,
+              color: displayColor,
             ),
-          ),
-          const SizedBox(height: 4),
-          // Badge status indicator
-          if (isCurrent && !isEarned)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-              decoration: BoxDecoration(
-                color: Colors.blue[100],
-                borderRadius: BorderRadius.circular(10),
-              ),
+            const SizedBox(height: 4),
+            // Badge title
+            Flexible(
               child: Text(
-                'Current',
+                badge.title,
+                textAlign: TextAlign.center,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
                 style: TextStyle(
-                  fontSize: 8,
-                  color: Colors.blue[800],
-                  fontWeight: FontWeight.bold,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w500,
+                  color: isEarned ? Colors.black87 : Colors.grey[600],
                 ),
               ),
             ),
-          if (isEarned)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-              decoration: BoxDecoration(
-                color: Colors.green[100],
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Text(
-                'Earned',
-                style: TextStyle(
-                  fontSize: 8,
-                  color: Colors.green[800],
-                  fontWeight: FontWeight.bold,
+            // Badge status indicator
+            if (isCurrent && !isEarned)
+              Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                  decoration: BoxDecoration(
+                    color: Colors.blue[100],
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    'Current',
+                    style: TextStyle(
+                      fontSize: 7,
+                      color: Colors.blue[800],
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
                 ),
               ),
-            ),
-        ],
+            if (isEarned)
+              Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                  decoration: BoxDecoration(
+                    color: Colors.green[100],
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    'Earned',
+                    style: TextStyle(
+                      fontSize: 7,
+                      color: Colors.green[800],
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }

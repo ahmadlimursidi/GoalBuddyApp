@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:file_picker/file_picker.dart';
+import 'dart:typed_data';
 import '../../config/theme.dart';
 import '../../view_models/auth_view_model.dart';
 import '../../view_models/student_parent_view_model.dart';
-import '../../widgets/badge_grid.dart'; // Ensure this is imported for the progress tab
+import '../../widgets/badge_grid.dart';
 import '../../models/drill_data.dart';
+import '../../services/storage_service.dart';
 import '../admin/session_template_details_view.dart';
 
 class StudentParentDashboardView extends StatefulWidget {
@@ -601,6 +604,22 @@ class _StudentParentDashboardViewState extends State<StudentParentDashboardView>
                     );
                   }
 
+                  // Get age group and generate mock badges if real badges are empty
+                  String ageGroup = _normalizeAgeGroup(viewModel.childAgeGroup ?? 'Junior Kickers');
+                  List<String> possibleBadges = _getPossibleBadgesForAgeGroup(ageGroup);
+
+                  // Use real badges if available, otherwise use mock badges
+                  List<String> earnedBadgeIds = viewModel.childBadges.isNotEmpty
+                      ? viewModel.childBadges.map((b) => b['id'] as String).toList()
+                      : _generateMockBadges(ageGroup, possibleBadges);
+
+                  // Calculate current badge (first unearned)
+                  String? currentBadgeId = possibleBadges.firstWhere(
+                    (badge) => !earnedBadgeIds.contains(badge),
+                    orElse: () => '',
+                  );
+                  if (currentBadgeId.isEmpty) currentBadgeId = null;
+
                   // Stats Row
                   return Column(
                     children: [
@@ -609,7 +628,7 @@ class _StudentParentDashboardViewState extends State<StudentParentDashboardView>
                           Expanded(
                             child: _buildStatContainer(
                               "Badges Earned",
-                              "${viewModel.childBadges.length}",
+                              "${earnedBadgeIds.length}",
                               Icons.emoji_events,
                               Colors.amber,
                             ),
@@ -630,9 +649,9 @@ class _StudentParentDashboardViewState extends State<StudentParentDashboardView>
                       // Badge Grid
                       if (viewModel.studentId != null)
                         BadgeGrid(
-                          ageGroup: viewModel.childAgeGroup ?? 'Junior Kickers',
-                          earnedBadgeIds: viewModel.childBadges.map((b) => b['id'] as String).toList(),
-                          currentBadgeId: null, // Optional: highlight next badge
+                          ageGroup: ageGroup,
+                          earnedBadgeIds: earnedBadgeIds,
+                          currentBadgeId: currentBadgeId,
                         ),
                     ],
                   );
@@ -645,9 +664,82 @@ class _StudentParentDashboardViewState extends State<StudentParentDashboardView>
     );
   }
 
+  // Normalize age group name to match badge_data.dart format
+  String _normalizeAgeGroup(String ageGroup) {
+    String normalized = ageGroup.toLowerCase().trim();
+
+    if (normalized.contains('little') && normalized.contains('kick')) {
+      return 'Little Kicks';
+    } else if (normalized.contains('junior') && normalized.contains('kick')) {
+      return 'Junior Kickers';
+    } else if (normalized.contains('mighty') && normalized.contains('kick')) {
+      return 'Mighty Kickers';
+    } else if (normalized.contains('mega') && normalized.contains('kick')) {
+      return 'Mega Kickers';
+    }
+
+    return ageGroup;
+  }
+
+  // Generate mock badges based on age group
+  List<String> _generateMockBadges(String ageGroup, List<String> possibleBadges) {
+    String normalizedAgeGroup = _normalizeAgeGroup(ageGroup);
+
+    int count;
+    switch (normalizedAgeGroup) {
+      case 'Mega Kickers':
+        count = 6;
+        break;
+      case 'Mighty Kickers':
+        count = 4;
+        break;
+      case 'Junior Kickers':
+        count = 3;
+        break;
+      case 'Little Kicks':
+      default:
+        count = 2;
+        break;
+    }
+    count = count.clamp(0, possibleBadges.length);
+    return possibleBadges.take(count).toList();
+  }
+
+  // Get possible badges based on age group
+  List<String> _getPossibleBadgesForAgeGroup(String ageGroup) {
+    String normalizedAgeGroup = _normalizeAgeGroup(ageGroup);
+
+    List<String> possibleBadges = [];
+    if (normalizedAgeGroup == 'Mega Kickers') {
+      possibleBadges.addAll([
+        'lk_attention_listening', 'lk_sharing', 'lk_kicking', 'lk_confidence',
+        'jk_kicking', 'jk_imagination', 'jk_physical_literacy', 'jk_team_player',
+        'mk_leadership', 'mk_physical_literacy', 'mk_all_rounder', 'mk_problem_solver', 'mk_kicking', 'mk_match_play',
+        'mega_attacking', 'mega_defending', 'mega_tactician', 'mega_captain', 'mega_all_rounder', 'mega_referee'
+      ]);
+    } else if (normalizedAgeGroup == 'Mighty Kickers') {
+      possibleBadges.addAll([
+        'lk_attention_listening', 'lk_sharing', 'lk_kicking', 'lk_confidence',
+        'jk_kicking', 'jk_imagination', 'jk_physical_literacy', 'jk_team_player',
+        'mk_leadership', 'mk_physical_literacy', 'mk_all_rounder', 'mk_problem_solver', 'mk_kicking', 'mk_match_play'
+      ]);
+    } else if (normalizedAgeGroup == 'Junior Kickers') {
+      possibleBadges.addAll([
+        'lk_attention_listening', 'lk_sharing', 'lk_kicking', 'lk_confidence',
+        'jk_kicking', 'jk_imagination', 'jk_physical_literacy', 'jk_team_player'
+      ]);
+    } else {
+      // Little Kicks or default
+      possibleBadges.addAll([
+        'lk_attention_listening', 'lk_sharing', 'lk_kicking', 'lk_confidence'
+      ]);
+    }
+    return possibleBadges;
+  }
+
   // --- Helper Widgets ---
 
-  // Show payment confirmation dialog
+  // Show payment confirmation dialog with receipt upload
   void _showPaymentConfirmationDialog(BuildContext context, StudentParentViewModel viewModel) {
     // Check if studentId is available before proceeding
     if (viewModel.studentId == null) {
@@ -665,69 +757,11 @@ class _StudentParentDashboardViewState extends State<StudentParentDashboardView>
 
     showDialog(
       context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text("Payment Confirmation"),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text("Have you paid for $monthYear?"),
-              const SizedBox(height: 16),
-              Text(
-                "Please confirm that you have made the payment for this month. "
-                "Your confirmation will be sent to the admin for verification.",
-                style: TextStyle(color: Colors.grey[600]),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text("Cancel"),
-            ),
-            ElevatedButton(
-              onPressed: () async {
-                // Record payment intent in Firestore
-                try {
-                  await FirebaseFirestore.instance
-                      .collection('students')
-                      .doc(viewModel.studentId!)
-                      .collection('payments')
-                      .doc(monthYear.replaceAll(' ', '_'))
-                      .set({
-                    'month': monthYear,
-                    'amount': 0, // This would be set by admin
-                    'status': 'pending', // pending, confirmed, rejected
-                    'parentConfirmed': true,
-                    'adminConfirmed': false,
-                    'parentConfirmedAt': FieldValue.serverTimestamp(),
-                    'adminConfirmedAt': null,
-                    'notes': 'Parent confirmed payment for $monthYear',
-                    'studentId': viewModel.studentId,
-                    'studentName': viewModel.studentName,
-                  });
-
-                  Navigator.of(context).pop(); // Close dialog
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text("Payment confirmation sent to admin"),
-                      backgroundColor: AppTheme.pitchGreen,
-                    ),
-                  );
-                } catch (e) {
-                  Navigator.of(context).pop(); // Close dialog
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text("Error confirming payment: $e"),
-                      backgroundColor: Colors.red,
-                    ),
-                  );
-                }
-              },
-              child: const Text("Yes, I Paid"),
-            ),
-          ],
+      builder: (BuildContext dialogContext) {
+        return _PaymentConfirmationDialog(
+          monthYear: monthYear,
+          studentId: viewModel.studentId!,
+          studentName: viewModel.studentName ?? 'Student',
         );
       },
     );
@@ -1178,7 +1212,7 @@ class _StudentParentDashboardViewState extends State<StudentParentDashboardView>
           .get();
 
       if (doc.exists) {
-        final data = doc.data() as Map<String, dynamic>?;
+        final data = doc.data();
         if (data != null) {
           final status = data['status'] as String?;
           // Return the status: 'pending', 'confirmed'/'paid', or 'rejected'
@@ -1193,8 +1227,319 @@ class _StudentParentDashboardViewState extends State<StudentParentDashboardView>
       }
       return 'unpaid'; // Default to unpaid if no payment record exists
     } catch (e) {
-      print("Error checking payment status: $e");
+      debugPrint("Error checking payment status: $e");
       return 'unpaid'; // Default to unpaid if there's an error
     }
+  }
+}
+
+// Payment Confirmation Dialog with Receipt Upload
+class _PaymentConfirmationDialog extends StatefulWidget {
+  final String monthYear;
+  final String studentId;
+  final String studentName;
+
+  const _PaymentConfirmationDialog({
+    required this.monthYear,
+    required this.studentId,
+    required this.studentName,
+  });
+
+  @override
+  State<_PaymentConfirmationDialog> createState() => _PaymentConfirmationDialogState();
+}
+
+class _PaymentConfirmationDialogState extends State<_PaymentConfirmationDialog> {
+  Uint8List? _selectedFileBytes;
+  String? _selectedFileName;
+  String? _selectedFileType;
+  bool _isUploading = false;
+  final StorageService _storageService = StorageService();
+
+  Future<void> _pickFile() async {
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['pdf', 'png', 'jpg', 'jpeg'],
+        withData: true,
+      );
+
+      if (result != null && result.files.isNotEmpty) {
+        final file = result.files.first;
+        if (file.bytes != null) {
+          setState(() {
+            _selectedFileBytes = file.bytes;
+            _selectedFileName = file.name;
+            _selectedFileType = _getContentType(file.extension ?? '');
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint("Error picking file: $e");
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("Error selecting file: $e"),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  String _getContentType(String extension) {
+    switch (extension.toLowerCase()) {
+      case 'pdf':
+        return 'application/pdf';
+      case 'png':
+        return 'image/png';
+      case 'jpg':
+      case 'jpeg':
+        return 'image/jpeg';
+      default:
+        return 'application/octet-stream';
+    }
+  }
+
+  Future<void> _submitPayment() async {
+    if (_selectedFileBytes == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Please upload a receipt or screenshot as proof of payment"),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    setState(() {
+      _isUploading = true;
+    });
+
+    try {
+      // Upload receipt to Firebase Storage
+      final receiptUrl = await _storageService.uploadPaymentReceipt(
+        fileBytes: _selectedFileBytes!,
+        studentId: widget.studentId,
+        monthYear: widget.monthYear,
+        fileName: _selectedFileName ?? 'receipt',
+        contentType: _selectedFileType ?? 'application/octet-stream',
+      );
+
+      if (receiptUrl == null) {
+        throw Exception("Failed to upload receipt");
+      }
+
+      // Save payment record to Firestore
+      await FirebaseFirestore.instance
+          .collection('students')
+          .doc(widget.studentId)
+          .collection('payments')
+          .doc(widget.monthYear.replaceAll(' ', '_'))
+          .set({
+        'month': widget.monthYear,
+        'amount': 0,
+        'status': 'pending',
+        'parentConfirmed': true,
+        'adminConfirmed': false,
+        'parentConfirmedAt': FieldValue.serverTimestamp(),
+        'adminConfirmedAt': null,
+        'notes': 'Parent confirmed payment for ${widget.monthYear}',
+        'studentId': widget.studentId,
+        'studentName': widget.studentName,
+        'receiptUrl': receiptUrl,
+        'receiptFileName': _selectedFileName,
+        'receiptType': _selectedFileType,
+      });
+
+      if (mounted) {
+        Navigator.of(context).pop();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Payment confirmation with receipt sent to admin"),
+            backgroundColor: AppTheme.pitchGreen,
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint("Error submitting payment: $e");
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("Error confirming payment: $e"),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isUploading = false;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      title: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: AppTheme.primaryRed.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: const Icon(Icons.payment, color: AppTheme.primaryRed, size: 20),
+          ),
+          const SizedBox(width: 12),
+          const Expanded(
+            child: Text(
+              "Payment Confirmation",
+              style: TextStyle(fontSize: 18),
+            ),
+          ),
+        ],
+      ),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              "Confirm payment for ${widget.monthYear}",
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              "Please upload a receipt or screenshot as proof of payment. "
+              "Accepted formats: PDF, PNG, JPG, JPEG",
+              style: TextStyle(color: Colors.grey[600], fontSize: 14),
+            ),
+            const SizedBox(height: 20),
+
+            // File Upload Section
+            InkWell(
+              onTap: _isUploading ? null : _pickFile,
+              borderRadius: BorderRadius.circular(12),
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: _selectedFileBytes != null
+                      ? AppTheme.pitchGreen.withValues(alpha: 0.1)
+                      : Colors.grey[100],
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: _selectedFileBytes != null
+                        ? AppTheme.pitchGreen
+                        : Colors.grey[300]!,
+                    width: 1.5,
+                    style: BorderStyle.solid,
+                  ),
+                ),
+                child: Column(
+                  children: [
+                    Icon(
+                      _selectedFileBytes != null
+                          ? Icons.check_circle
+                          : Icons.cloud_upload_outlined,
+                      size: 48,
+                      color: _selectedFileBytes != null
+                          ? AppTheme.pitchGreen
+                          : Colors.grey[400],
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      _selectedFileName ?? "Tap to upload receipt",
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: _selectedFileBytes != null
+                            ? AppTheme.pitchGreen
+                            : Colors.grey[600],
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    if (_selectedFileBytes == null) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        "PDF, PNG, JPG, JPEG",
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey[500],
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+
+            // Preview for images
+            if (_selectedFileBytes != null &&
+                (_selectedFileType?.startsWith('image/') ?? false)) ...[
+              const SizedBox(height: 16),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: Image.memory(
+                  _selectedFileBytes!,
+                  height: 150,
+                  width: double.infinity,
+                  fit: BoxFit.cover,
+                ),
+              ),
+            ],
+
+            // Change file button
+            if (_selectedFileBytes != null) ...[
+              const SizedBox(height: 12),
+              TextButton.icon(
+                onPressed: _isUploading ? null : _pickFile,
+                icon: const Icon(Icons.swap_horiz, size: 18),
+                label: const Text("Change file"),
+                style: TextButton.styleFrom(
+                  foregroundColor: Colors.grey[600],
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: _isUploading ? null : () => Navigator.of(context).pop(),
+          child: Text(
+            "Cancel",
+            style: TextStyle(color: Colors.grey[600]),
+          ),
+        ),
+        ElevatedButton(
+          onPressed: _isUploading ? null : _submitPayment,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: AppTheme.primaryRed,
+            foregroundColor: Colors.white,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+          ),
+          child: _isUploading
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                  ),
+                )
+              : const Text("Submit Payment"),
+        ),
+      ],
+    );
   }
 }

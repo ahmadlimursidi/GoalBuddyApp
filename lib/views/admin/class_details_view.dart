@@ -11,10 +11,10 @@ class ClassDetailsView extends StatefulWidget {
   final Map<String, dynamic> classData;
 
   const ClassDetailsView({
-    Key? key,
+    super.key,
     required this.classId,
     required this.classData,
-  }) : super(key: key);
+  });
 
   @override
   State<ClassDetailsView> createState() => _ClassDetailsViewState();

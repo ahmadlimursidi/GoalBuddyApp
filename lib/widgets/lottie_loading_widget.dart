@@ -8,12 +8,12 @@ class LottieLoadingWidget extends StatelessWidget {
   final String? animationUrl;
 
   const LottieLoadingWidget({
-    Key? key,
+    super.key,
     this.width = 100,
     this.height = 100,
     this.color,
     this.animationUrl,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {

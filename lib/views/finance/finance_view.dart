@@ -583,7 +583,7 @@ class _StudentFeesScreenState extends State<StudentFeesScreen> {
               .doc(linkedUserId)
               .get();
           if (userDoc.exists) {
-            final userData = userDoc.data() as Map<String, dynamic>?;
+            final userData = userDoc.data();
             if (userData != null) {
               parentEmail = userData['email'] ?? 'No Email';
             }
@@ -651,6 +651,7 @@ class _StudentListWithPaymentStream extends StatelessWidget {
         int unpaidCount = 0;
 
         Map<String, String> paymentStatuses = {};
+        Map<String, Map<String, dynamic>> paymentData = {};
 
         if (paymentSnapshot.hasData) {
           for (int i = 0; i < students.length; i++) {
@@ -665,6 +666,7 @@ class _StudentListWithPaymentStream extends StatelessWidget {
                 final data = paymentDoc.data() as Map<String, dynamic>?;
                 if (data != null) {
                   status = (data['status'] as String?)?.toLowerCase() ?? 'unpaid';
+                  paymentData[studentId] = data;
                 }
               }
             }
@@ -737,6 +739,7 @@ class _StudentListWithPaymentStream extends StatelessWidget {
                   final data = student.data() as Map<String, dynamic>;
                   final paymentStatus = paymentStatuses[student.id] ?? 'unpaid';
                   final parentEmail = parentEmails[student.id] ?? 'No Email';
+                  final studentPaymentData = paymentData[student.id];
 
                   return _buildStudentFeeCard(
                     context,
@@ -745,6 +748,9 @@ class _StudentListWithPaymentStream extends StatelessWidget {
                     paymentStatus,
                     parentEmail,
                     monthYear,
+                    receiptUrl: studentPaymentData?['receiptUrl'] as String?,
+                    receiptFileName: studentPaymentData?['receiptFileName'] as String?,
+                    receiptType: studentPaymentData?['receiptType'] as String?,
                   );
                 },
               ),
@@ -822,8 +828,11 @@ class _StudentListWithPaymentStream extends StatelessWidget {
     Map<String, dynamic> data,
     String paymentStatus,
     String parentEmail,
-    String monthYear,
-  ) {
+    String monthYear, {
+    String? receiptUrl,
+    String? receiptFileName,
+    String? receiptType,
+  }) {
     Color statusColor;
     IconData statusIcon;
     String statusText;
@@ -846,6 +855,8 @@ class _StudentListWithPaymentStream extends StatelessWidget {
         statusText = "UNPAID";
         break;
     }
+
+    final bool hasReceipt = receiptUrl != null && receiptUrl.isNotEmpty;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
@@ -897,6 +908,42 @@ class _StudentListWithPaymentStream extends StatelessWidget {
                     ],
                   ),
                 ),
+                // Receipt indicator
+                if (hasReceipt) ...[
+                  InkWell(
+                    onTap: () => _showReceiptDialog(context, receiptUrl, receiptFileName, receiptType),
+                    borderRadius: BorderRadius.circular(6),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: Colors.blue.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            receiptType?.startsWith('image/') == true
+                                ? Icons.image
+                                : Icons.picture_as_pdf,
+                            color: Colors.blue,
+                            size: 12,
+                          ),
+                          const SizedBox(width: 4),
+                          const Text(
+                            "Receipt",
+                            style: TextStyle(
+                              color: Colors.blue,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 10,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                ],
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                   decoration: BoxDecoration(
@@ -917,7 +964,7 @@ class _StudentListWithPaymentStream extends StatelessWidget {
             // Show action buttons for pending payments
             if (paymentStatus == 'pending') ...[
               const SizedBox(height: 8),
-              _buildPaymentActionButtons(context, studentDoc.id, data['name'] ?? 'Unknown Student', monthYear),
+              _buildPaymentActionButtons(context, studentDoc.id, data['name'] ?? 'Unknown Student', monthYear, hasReceipt: hasReceipt, receiptUrl: receiptUrl, receiptFileName: receiptFileName, receiptType: receiptType),
             ],
           ],
         ),
@@ -925,57 +972,261 @@ class _StudentListWithPaymentStream extends StatelessWidget {
     );
   }
 
-  Widget _buildPaymentActionButtons(BuildContext context, String studentId, String studentName, String monthYear) {
+  void _showReceiptDialog(BuildContext context, String? receiptUrl, String? fileName, String? fileType) {
+    if (receiptUrl == null) return;
+
+    final bool isImage = fileType?.startsWith('image/') == true;
+    final bool isPdf = fileType == 'application/pdf';
+
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return Dialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Header
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.blue.withOpacity(0.1),
+                  borderRadius: const BorderRadius.only(
+                    topLeft: Radius.circular(16),
+                    topRight: Radius.circular(16),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      isImage ? Icons.image : Icons.picture_as_pdf,
+                      color: Colors.blue,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            "Payment Receipt",
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                            ),
+                          ),
+                          if (fileName != null)
+                            Text(
+                              fileName,
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey[600],
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close),
+                      onPressed: () => Navigator.of(context).pop(),
+                    ),
+                  ],
+                ),
+              ),
+              // Content
+              if (isImage)
+                Container(
+                  constraints: BoxConstraints(
+                    maxHeight: MediaQuery.of(context).size.height * 0.6,
+                  ),
+                  child: InteractiveViewer(
+                    child: Image.network(
+                      receiptUrl,
+                      fit: BoxFit.contain,
+                      loadingBuilder: (context, child, loadingProgress) {
+                        if (loadingProgress == null) return child;
+                        return Container(
+                          height: 200,
+                          alignment: Alignment.center,
+                          child: CircularProgressIndicator(
+                            value: loadingProgress.expectedTotalBytes != null
+                                ? loadingProgress.cumulativeBytesLoaded /
+                                    loadingProgress.expectedTotalBytes!
+                                : null,
+                            color: AppTheme.primaryRed,
+                          ),
+                        );
+                      },
+                      errorBuilder: (context, error, stackTrace) {
+                        return Container(
+                          height: 200,
+                          alignment: Alignment.center,
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.error_outline, size: 48, color: Colors.grey[400]),
+                              const SizedBox(height: 8),
+                              Text(
+                                "Failed to load image",
+                                style: TextStyle(color: Colors.grey[600]),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                )
+              else if (isPdf)
+                Container(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    children: [
+                      Icon(Icons.picture_as_pdf, size: 64, color: Colors.red[400]),
+                      const SizedBox(height: 16),
+                      const Text(
+                        "PDF Receipt",
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        "Tap the button below to open the PDF",
+                        style: TextStyle(color: Colors.grey[600]),
+                      ),
+                      const SizedBox(height: 16),
+                      ElevatedButton.icon(
+                        onPressed: () {
+                          Navigator.of(context).pop();
+                          Navigator.pushNamed(
+                            context,
+                            '/pdf_viewer',
+                            arguments: {'pdfUrl': receiptUrl, 'title': fileName ?? 'Receipt'},
+                          );
+                        },
+                        icon: const Icon(Icons.open_in_new),
+                        label: const Text("Open PDF"),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppTheme.primaryRed,
+                          foregroundColor: Colors.white,
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+              else
+                Container(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    children: [
+                      Icon(Icons.insert_drive_file, size: 64, color: Colors.grey[400]),
+                      const SizedBox(height: 16),
+                      const Text("Receipt uploaded"),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildPaymentActionButtons(
+    BuildContext context,
+    String studentId,
+    String studentName,
+    String monthYear, {
+    bool hasReceipt = false,
+    String? receiptUrl,
+    String? receiptFileName,
+    String? receiptType,
+  }) {
     return Padding(
       padding: const EdgeInsets.only(top: 8),
-      child: Row(
+      child: Column(
         children: [
-          Expanded(
-            child: ElevatedButton.icon(
-              onPressed: () async {
-                await _confirmPayment(studentId, monthYear, 'confirmed');
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text("Payment confirmed for $studentName"),
+          // View Receipt button if receipt exists
+          if (hasReceipt) ...[
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: () => _showReceiptDialog(context, receiptUrl, receiptFileName, receiptType),
+                icon: Icon(
+                  receiptType?.startsWith('image/') == true
+                      ? Icons.image
+                      : Icons.picture_as_pdf,
+                  size: 14,
+                ),
+                label: const Text("View Receipt", style: TextStyle(fontSize: 11)),
+                style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: Colors.blue, width: 1),
+                  foregroundColor: Colors.blue,
+                  padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 6),
+          ],
+          Row(
+            children: [
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: () async {
+                    await _confirmPayment(studentId, monthYear, 'confirmed');
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text("Payment confirmed for $studentName"),
+                          backgroundColor: Colors.green,
+                        ),
+                      );
+                    }
+                  },
+                  icon: const Icon(Icons.check, size: 14),
+                  label: const Text("Confirm", style: TextStyle(fontSize: 11)),
+                  style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.green,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(6),
+                    ),
                   ),
-                );
-              },
-              icon: const Icon(Icons.check, size: 14),
-              label: const Text("Confirm", style: TextStyle(fontSize: 11)),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.green,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(6),
                 ),
               ),
-            ),
-          ),
-          const SizedBox(width: 6),
-          Expanded(
-            child: OutlinedButton.icon(
-              onPressed: () async {
-                await _confirmPayment(studentId, monthYear, 'rejected');
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text("Payment marked as rejected for $studentName"),
-                    backgroundColor: Colors.red,
+              const SizedBox(width: 6),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () async {
+                    await _confirmPayment(studentId, monthYear, 'rejected');
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text("Payment marked as rejected for $studentName"),
+                          backgroundColor: Colors.red,
+                        ),
+                      );
+                    }
+                  },
+                  icon: const Icon(Icons.close, size: 14),
+                  label: const Text("Reject", style: TextStyle(fontSize: 11)),
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: Colors.red, width: 1),
+                    foregroundColor: Colors.red,
+                    padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(6),
+                    ),
                   ),
-                );
-              },
-              icon: const Icon(Icons.close, size: 14),
-              label: const Text("Reject", style: TextStyle(fontSize: 11)),
-              style: OutlinedButton.styleFrom(
-                side: const BorderSide(color: Colors.red, width: 1),
-                foregroundColor: Colors.red,
-                padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(6),
                 ),
               ),
-            ),
+            ],
           ),
         ],
       ),

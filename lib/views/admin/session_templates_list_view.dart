@@ -454,7 +454,7 @@ class SessionTemplatesListView extends StatelessWidget {
                 ),
                 const SizedBox(height: 16),
                 DropdownButtonFormField<String>(
-                  value: selectedAgeGroup,
+                  initialValue: selectedAgeGroup,
                   decoration: const InputDecoration(
                     labelText: 'Age Group',
                     border: OutlineInputBorder(),
@@ -468,7 +468,7 @@ class SessionTemplatesListView extends StatelessWidget {
                 ),
                 const SizedBox(height: 16),
                 DropdownButtonFormField<String>(
-                  value: selectedBadgeFocus,
+                  initialValue: selectedBadgeFocus,
                   decoration: const InputDecoration(
                     labelText: 'Badge Focus',
                     border: OutlineInputBorder(),

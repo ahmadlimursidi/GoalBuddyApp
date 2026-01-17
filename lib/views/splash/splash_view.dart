@@ -59,8 +59,8 @@ class _SplashViewState extends State<SplashView> with SingleTickerProviderStateM
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   // Lottie animation from the provided URL
-                  Lottie.network(
-                    'https://lottie.host/ccc3dc16-b183-4e29-8f34-37e18ebd7a79/RH1W780Zpt.json',
+                  Lottie.asset(
+                    'assets/animations/fifa_splash.json',
                     width: 300,
                     height: 300,
                     fit: BoxFit.contain,
