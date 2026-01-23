@@ -479,27 +479,46 @@ class _StudentProfileViewState extends State<StudentProfileView> {
                   ],
 
                   // Notes Section
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      _buildSectionHeader("Coach Notes", Icons.note_alt_outlined),
-                      IconButton(
-                        icon: const Icon(Icons.add_circle, color: AppTheme.primaryRed),
-                        onPressed: _addNote,
-                      ),
-                    ],
+                  Builder(
+                    builder: (context) {
+                      final arguments = ModalRoute.of(context)?.settings.arguments;
+                      final args = arguments as Map<String, dynamic>?;
+                      final isParentViewing = args?['isParentViewing'] as bool? ?? false;
+
+                      return Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          _buildSectionHeader("Coach Notes", Icons.note_alt_outlined),
+                          if (!isParentViewing)
+                            IconButton(
+                              icon: const Icon(Icons.add_circle, color: AppTheme.primaryRed),
+                              onPressed: _addNote,
+                            ),
+                        ],
+                      );
+                    },
                   ),
                   if (_notes.isEmpty)
-                    Container(
-                      padding: const EdgeInsets.all(24),
-                      decoration: _cardDecoration(),
-                      child: const Center(
-                        child: Text(
-                          "No notes yet.\nTap + to add one.",
-                          textAlign: TextAlign.center,
-                          style: TextStyle(color: Colors.grey),
-                        ),
-                      ),
+                    Builder(
+                      builder: (context) {
+                        final arguments = ModalRoute.of(context)?.settings.arguments;
+                        final args = arguments as Map<String, dynamic>?;
+                        final isParentViewing = args?['isParentViewing'] as bool? ?? false;
+
+                        return Container(
+                          padding: const EdgeInsets.all(24),
+                          decoration: _cardDecoration(),
+                          child: Center(
+                            child: Text(
+                              isParentViewing
+                                  ? "No coach notes yet."
+                                  : "No notes yet.\nTap + to add one.",
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(color: Colors.grey),
+                            ),
+                          ),
+                        );
+                      },
                     )
                   else
                     ListView.builder(
