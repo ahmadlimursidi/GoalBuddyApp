@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import '../../config/theme.dart';
 import '../../view_models/dashboard_view_model.dart';
 import '../../view_models/auth_view_model.dart';
+import '../../services/firestore_service.dart';
 import '../resources/drill_library_view.dart';
 import '../coach/coach_profile_view.dart';
 
@@ -18,6 +19,7 @@ class CoachDashboardView extends StatefulWidget {
 class _CoachDashboardViewState extends State<CoachDashboardView> {
   // Light blue color for assistant coach sessions
   static const Color assistantBlue = Color(0xFF42A5F5);
+  final FirestoreService _firestoreService = FirestoreService();
 
   @override
   void initState() {
@@ -221,6 +223,47 @@ class _CoachDashboardViewState extends State<CoachDashboardView> {
                   ),
                 ),
                 actions: [
+                  // Notification Bell with Badge
+                  StreamBuilder<int>(
+                    stream: authViewModel.currentUser != null
+                        ? _firestoreService.getUnreadNotificationCount(authViewModel.currentUser!.uid)
+                        : const Stream.empty(),
+                    builder: (context, snapshot) {
+                      final unreadCount = snapshot.data ?? 0;
+                      return Stack(
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.notifications_outlined, color: Colors.white),
+                            onPressed: () {
+                              Navigator.pushNamed(context, '/notifications');
+                            },
+                          ),
+                          if (unreadCount > 0)
+                            Positioned(
+                              right: 8,
+                              top: 8,
+                              child: Container(
+                                padding: const EdgeInsets.all(4),
+                                decoration: const BoxDecoration(
+                                  color: Colors.yellow,
+                                  shape: BoxShape.circle,
+                                ),
+                                constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
+                                child: Text(
+                                  unreadCount > 9 ? '9+' : '$unreadCount',
+                                  style: const TextStyle(
+                                    color: AppTheme.primaryRed,
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                  textAlign: TextAlign.center,
+                                ),
+                              ),
+                            ),
+                        ],
+                      );
+                    },
+                  ),
                   IconButton(
                     icon: const Icon(Icons.logout, color: Colors.white),
                     onPressed: () async {

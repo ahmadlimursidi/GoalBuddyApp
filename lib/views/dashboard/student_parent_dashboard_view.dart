@@ -9,6 +9,8 @@ import '../../view_models/student_parent_view_model.dart';
 import '../../widgets/badge_grid.dart';
 import '../../models/drill_data.dart';
 import '../../services/storage_service.dart';
+import '../../services/firestore_service.dart';
+import '../../services/gemini_receipt_service.dart';
 import '../admin/session_template_details_view.dart';
 
 class StudentParentDashboardView extends StatefulWidget {
@@ -20,6 +22,7 @@ class StudentParentDashboardView extends StatefulWidget {
 
 class _StudentParentDashboardViewState extends State<StudentParentDashboardView> {
   int _currentIndex = 0;
+  final FirestoreService _firestoreService = FirestoreService();
 
   @override
   void initState() {
@@ -60,6 +63,47 @@ class _StudentParentDashboardViewState extends State<StudentParentDashboardView>
         elevation: 0,
         centerTitle: true,
         actions: [
+          // Notification Bell with Badge
+          StreamBuilder<int>(
+            stream: authViewModel.currentUser != null
+                ? _firestoreService.getUnreadNotificationCount(authViewModel.currentUser!.uid)
+                : const Stream.empty(),
+            builder: (context, snapshot) {
+              final unreadCount = snapshot.data ?? 0;
+              return Stack(
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.notifications_outlined, color: Colors.white),
+                    onPressed: () {
+                      Navigator.pushNamed(context, '/notifications');
+                    },
+                  ),
+                  if (unreadCount > 0)
+                    Positioned(
+                      right: 8,
+                      top: 8,
+                      child: Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: const BoxDecoration(
+                          color: Colors.yellow,
+                          shape: BoxShape.circle,
+                        ),
+                        constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
+                        child: Text(
+                          unreadCount > 9 ? '9+' : '$unreadCount',
+                          style: const TextStyle(
+                            color: AppTheme.primaryRed,
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    ),
+                ],
+              );
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.logout, color: Colors.white),
             onPressed: () async {
@@ -1254,7 +1298,22 @@ class _PaymentConfirmationDialogState extends State<_PaymentConfirmationDialog> 
   String? _selectedFileName;
   String? _selectedFileType;
   bool _isUploading = false;
+  bool _isAnalyzing = false;
   final StorageService _storageService = StorageService();
+  final GeminiReceiptService _receiptService = GeminiReceiptService();
+
+  // AI-extracted data
+  final TextEditingController _amountController = TextEditingController();
+  String? _extractedDate;
+  String? _extractedReference;
+  String? _extractedPaymentMethod;
+  bool _hasAnalyzed = false;
+
+  @override
+  void dispose() {
+    _amountController.dispose();
+    super.dispose();
+  }
 
   Future<void> _pickFile() async {
     try {
@@ -1267,11 +1326,16 @@ class _PaymentConfirmationDialogState extends State<_PaymentConfirmationDialog> 
       if (result != null && result.files.isNotEmpty) {
         final file = result.files.first;
         if (file.bytes != null) {
+          final contentType = _getContentType(file.extension ?? '');
           setState(() {
             _selectedFileBytes = file.bytes;
             _selectedFileName = file.name;
-            _selectedFileType = _getContentType(file.extension ?? '');
+            _selectedFileType = contentType;
+            _hasAnalyzed = false;
           });
+
+          // Auto-analyze receipt with AI
+          await _analyzeReceipt(file.bytes!, contentType);
         }
       }
     } catch (e) {
@@ -1283,6 +1347,67 @@ class _PaymentConfirmationDialogState extends State<_PaymentConfirmationDialog> 
             backgroundColor: Colors.red,
           ),
         );
+      }
+    }
+  }
+
+  Future<void> _analyzeReceipt(Uint8List bytes, String mimeType) async {
+    if (!mounted) return;
+
+    setState(() {
+      _isAnalyzing = true;
+    });
+
+    try {
+      ReceiptData result;
+      if (mimeType == 'application/pdf') {
+        result = await _receiptService.extractFromPdf(bytes);
+      } else {
+        result = await _receiptService.extractFromImage(bytes, mimeType);
+      }
+
+      if (!mounted) return;
+
+      if (result.success) {
+        setState(() {
+          if (result.amount != null) {
+            _amountController.text = result.amount!.toStringAsFixed(2);
+          }
+          _extractedDate = result.date;
+          _extractedReference = result.referenceNumber;
+          _extractedPaymentMethod = result.paymentMethod;
+          _hasAnalyzed = true;
+          _isAnalyzing = false;
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(result.amount != null
+                ? "AI detected amount: RM ${result.amount!.toStringAsFixed(2)}"
+                : "Receipt analyzed - please enter amount manually"),
+            backgroundColor: result.amount != null ? AppTheme.pitchGreen : Colors.orange,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      } else {
+        setState(() {
+          _hasAnalyzed = true;
+          _isAnalyzing = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("Could not read receipt: ${result.error ?? 'Unknown error'}"),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint("Error analyzing receipt: $e");
+      if (mounted) {
+        setState(() {
+          _isAnalyzing = false;
+          _hasAnalyzed = true;
+        });
       }
     }
   }
@@ -1299,6 +1424,30 @@ class _PaymentConfirmationDialogState extends State<_PaymentConfirmationDialog> 
       default:
         return 'application/octet-stream';
     }
+  }
+
+  Widget _buildInfoChip(IconData icon, String text) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: Colors.grey[200],
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 12, color: Colors.grey[600]),
+          const SizedBox(width: 4),
+          Flexible(
+            child: Text(
+              text,
+              style: TextStyle(fontSize: 10, color: Colors.grey[700]),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _submitPayment() async {
@@ -1330,6 +1479,9 @@ class _PaymentConfirmationDialogState extends State<_PaymentConfirmationDialog> 
         throw Exception("Failed to upload receipt");
       }
 
+      // Parse amount from controller
+      final amount = double.tryParse(_amountController.text) ?? 0;
+
       // Save payment record to Firestore
       await FirebaseFirestore.instance
           .collection('students')
@@ -1338,7 +1490,7 @@ class _PaymentConfirmationDialogState extends State<_PaymentConfirmationDialog> 
           .doc(widget.monthYear.replaceAll(' ', '_'))
           .set({
         'month': widget.monthYear,
-        'amount': 0,
+        'amount': amount,
         'status': 'pending',
         'parentConfirmed': true,
         'adminConfirmed': false,
@@ -1350,6 +1502,11 @@ class _PaymentConfirmationDialogState extends State<_PaymentConfirmationDialog> 
         'receiptUrl': receiptUrl,
         'receiptFileName': _selectedFileName,
         'receiptType': _selectedFileType,
+        // AI-extracted data for admin reference
+        'aiExtractedAmount': amount,
+        'aiExtractedDate': _extractedDate,
+        'aiExtractedReference': _extractedReference,
+        'aiExtractedPaymentMethod': _extractedPaymentMethod,
       });
 
       if (mounted) {
@@ -1496,11 +1653,130 @@ class _PaymentConfirmationDialogState extends State<_PaymentConfirmationDialog> 
               ),
             ],
 
+            // AI Analysis Status
+            if (_selectedFileBytes != null && _isAnalyzing) ...[
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.blue.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.blue.withValues(alpha: 0.3)),
+                ),
+                child: Row(
+                  children: [
+                    const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        valueColor: AlwaysStoppedAnimation<Color>(Colors.blue),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        "AI is reading your receipt...",
+                        style: TextStyle(
+                          color: Colors.blue[700],
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+
+            // Amount Field (editable, auto-filled by AI)
+            if (_selectedFileBytes != null && _hasAnalyzed) ...[
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppTheme.pitchGreen.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: AppTheme.pitchGreen.withValues(alpha: 0.3)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.auto_awesome, size: 16, color: AppTheme.pitchGreen),
+                        const SizedBox(width: 6),
+                        Text(
+                          "AI-Detected Payment Details",
+                          style: TextStyle(
+                            color: AppTheme.pitchGreen,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    // Amount Field
+                    TextFormField(
+                      controller: _amountController,
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      decoration: InputDecoration(
+                        labelText: "Payment Amount (RM)",
+                        hintText: "Enter amount",
+                        prefixText: "RM ",
+                        isDense: true,
+                        filled: true,
+                        fillColor: Colors.white,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: BorderSide(color: Colors.grey[300]!),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: BorderSide(color: Colors.grey[300]!),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: const BorderSide(color: AppTheme.pitchGreen),
+                        ),
+                      ),
+                    ),
+                    // Show extracted info
+                    if (_extractedReference != null || _extractedPaymentMethod != null) ...[
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 4,
+                        children: [
+                          if (_extractedPaymentMethod != null)
+                            _buildInfoChip(Icons.payment, _extractedPaymentMethod!),
+                          if (_extractedReference != null)
+                            _buildInfoChip(Icons.tag, _extractedReference!),
+                          if (_extractedDate != null)
+                            _buildInfoChip(Icons.calendar_today, _extractedDate!),
+                        ],
+                      ),
+                    ],
+                    const SizedBox(height: 8),
+                    Text(
+                      "You can edit the amount if it's incorrect",
+                      style: TextStyle(
+                        color: Colors.grey[600],
+                        fontSize: 11,
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+
             // Change file button
             if (_selectedFileBytes != null) ...[
               const SizedBox(height: 12),
               TextButton.icon(
-                onPressed: _isUploading ? null : _pickFile,
+                onPressed: (_isUploading || _isAnalyzing) ? null : _pickFile,
                 icon: const Icon(Icons.swap_horiz, size: 18),
                 label: const Text("Change file"),
                 style: TextButton.styleFrom(

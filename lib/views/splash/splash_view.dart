@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:lottie/lottie.dart';
+import 'package:provider/provider.dart';
 import 'dart:async';
+import '../../view_models/auth_view_model.dart';
 
 class SplashView extends StatefulWidget {
   const SplashView({super.key});
@@ -30,14 +32,37 @@ class _SplashViewState extends State<SplashView> with SingleTickerProviderStateM
     // Start fade-in animation
     _fadeController.forward();
 
-    // Wait for animation to complete, then fade out and navigate
+    // Wait for animation to complete, then check auth and navigate
     Timer(const Duration(seconds: 4), () async {
       _fadeController.reverse();
       await Future.delayed(const Duration(milliseconds: 500));
       if (mounted) {
-        Navigator.pushReplacementNamed(context, '/login');
+        await _checkAuthAndNavigate();
       }
     });
+  }
+
+  Future<void> _checkAuthAndNavigate() async {
+    final authViewModel = Provider.of<AuthViewModel>(context, listen: false);
+
+    // Check if user is already logged in
+    final role = await authViewModel.checkExistingSession();
+
+    if (!mounted) return;
+
+    if (role != null) {
+      // User is logged in, navigate to appropriate dashboard
+      if (role == "admin") {
+        Navigator.pushReplacementNamed(context, '/admin_dashboard');
+      } else if (role == "student_parent") {
+        Navigator.pushReplacementNamed(context, '/student_parent_dashboard');
+      } else {
+        Navigator.pushReplacementNamed(context, '/dashboard');
+      }
+    } else {
+      // User is not logged in, go to login screen
+      Navigator.pushReplacementNamed(context, '/login');
+    }
   }
 
   @override

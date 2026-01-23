@@ -2,6 +2,7 @@ import 'dart:math';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../models/session_template.dart';
+import '../models/notification_model.dart';
 
 class FirestoreService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
@@ -906,5 +907,240 @@ class FirestoreService {
       print('Error deleting session: $e');
       rethrow;
     }
+  }
+
+  // ==============================================================================
+  // 🔔 NOTIFICATIONS
+  // ==============================================================================
+
+  /// Update user's FCM token
+  Future<void> updateUserFcmToken(String userId, String token) async {
+    try {
+      await _db.collection('users').doc(userId).update({
+        'fcmToken': token,
+        'fcmTokenUpdatedAt': FieldValue.serverTimestamp(),
+      });
+    } catch (e) {
+      print('Error updating FCM token: $e');
+      rethrow;
+    }
+  }
+
+  /// Get FCM tokens for multiple users
+  Future<List<String>> getUserFcmTokens(List<String> userIds) async {
+    List<String> tokens = [];
+    try {
+      for (String userId in userIds) {
+        DocumentSnapshot doc = await _db.collection('users').doc(userId).get();
+        if (doc.exists) {
+          final data = doc.data() as Map<String, dynamic>?;
+          if (data != null && data['fcmToken'] != null) {
+            tokens.add(data['fcmToken'] as String);
+          }
+        }
+      }
+    } catch (e) {
+      print('Error getting FCM tokens: $e');
+    }
+    return tokens;
+  }
+
+  /// Get all coach FCM tokens
+  Future<Map<String, String>> getCoachTokens() async {
+    Map<String, String> tokens = {};
+    try {
+      QuerySnapshot snapshot = await _db
+          .collection('users')
+          .where('role', isEqualTo: 'coach')
+          .get();
+
+      for (var doc in snapshot.docs) {
+        final data = doc.data() as Map<String, dynamic>;
+        if (data['fcmToken'] != null) {
+          tokens[doc.id] = data['fcmToken'] as String;
+        }
+      }
+    } catch (e) {
+      print('Error getting coach tokens: $e');
+    }
+    return tokens;
+  }
+
+  /// Get all parent FCM tokens
+  Future<Map<String, String>> getParentTokens() async {
+    Map<String, String> tokens = {};
+    try {
+      QuerySnapshot snapshot = await _db
+          .collection('users')
+          .where('role', isEqualTo: 'student_parent')
+          .get();
+
+      for (var doc in snapshot.docs) {
+        final data = doc.data() as Map<String, dynamic>;
+        if (data['fcmToken'] != null) {
+          tokens[doc.id] = data['fcmToken'] as String;
+        }
+      }
+    } catch (e) {
+      print('Error getting parent tokens: $e');
+    }
+    return tokens;
+  }
+
+  /// Save a notification to Firestore
+  Future<void> saveNotification(NotificationModel notification) async {
+    try {
+      await _db.collection('notifications').add(notification.toMap());
+    } catch (e) {
+      print('Error saving notification: $e');
+      rethrow;
+    }
+  }
+
+  /// Save notifications for multiple users (batch)
+  Future<void> saveNotificationsForUsers({
+    required List<String> userIds,
+    required String title,
+    required String body,
+    required String type,
+    String? relatedSessionId,
+    String? targetRole,
+  }) async {
+    try {
+      WriteBatch batch = _db.batch();
+
+      for (String userId in userIds) {
+        DocumentReference docRef = _db.collection('notifications').doc();
+        batch.set(docRef, {
+          'title': title,
+          'body': body,
+          'type': type,
+          'targetUserId': userId,
+          'targetRole': targetRole,
+          'relatedSessionId': relatedSessionId,
+          'createdAt': FieldValue.serverTimestamp(),
+          'read': false,
+        });
+      }
+
+      await batch.commit();
+      print('Saved notifications for ${userIds.length} users');
+    } catch (e) {
+      print('Error saving notifications batch: $e');
+      rethrow;
+    }
+  }
+
+  /// Get notifications for a user
+  Stream<List<NotificationModel>> getUserNotifications(String userId) {
+    return _db
+        .collection('notifications')
+        .where('targetUserId', isEqualTo: userId)
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .map((snapshot) => snapshot.docs
+            .map((doc) => NotificationModel.fromFirestore(doc))
+            .toList());
+  }
+
+  /// Get unread notification count for a user
+  Stream<int> getUnreadNotificationCount(String userId) {
+    return _db
+        .collection('notifications')
+        .where('targetUserId', isEqualTo: userId)
+        .where('read', isEqualTo: false)
+        .snapshots()
+        .map((snapshot) => snapshot.docs.length);
+  }
+
+  /// Mark a notification as read
+  Future<void> markNotificationRead(String notificationId) async {
+    try {
+      await _db.collection('notifications').doc(notificationId).update({
+        'read': true,
+        'readAt': FieldValue.serverTimestamp(),
+      });
+    } catch (e) {
+      print('Error marking notification as read: $e');
+      rethrow;
+    }
+  }
+
+  /// Mark all notifications as read for a user
+  Future<void> markAllNotificationsRead(String userId) async {
+    try {
+      QuerySnapshot snapshot = await _db
+          .collection('notifications')
+          .where('targetUserId', isEqualTo: userId)
+          .where('read', isEqualTo: false)
+          .get();
+
+      if (snapshot.docs.isEmpty) return;
+
+      WriteBatch batch = _db.batch();
+      for (var doc in snapshot.docs) {
+        batch.update(doc.reference, {
+          'read': true,
+          'readAt': FieldValue.serverTimestamp(),
+        });
+      }
+      await batch.commit();
+    } catch (e) {
+      print('Error marking all notifications as read: $e');
+      rethrow;
+    }
+  }
+
+  /// Delete a notification
+  Future<void> deleteNotification(String notificationId) async {
+    try {
+      await _db.collection('notifications').doc(notificationId).delete();
+    } catch (e) {
+      print('Error deleting notification: $e');
+      rethrow;
+    }
+  }
+
+  /// Get user document by ID
+  Future<DocumentSnapshot> getUser(String userId) async {
+    return await _db.collection('users').doc(userId).get();
+  }
+
+  /// Get parents for students in a specific age group
+  Future<List<String>> getParentIdsForAgeGroup(String ageGroup) async {
+    List<String> parentIds = [];
+    try {
+      // Get all students with this age group
+      QuerySnapshot studentsSnapshot = await _db
+          .collection('students')
+          .where('ageGroup', isEqualTo: ageGroup)
+          .get();
+
+      // Get parent emails from students
+      Set<String> parentEmails = {};
+      for (var doc in studentsSnapshot.docs) {
+        final data = doc.data() as Map<String, dynamic>;
+        if (data['parentEmail'] != null) {
+          parentEmails.add(data['parentEmail'] as String);
+        }
+      }
+
+      // Find user IDs for these parent emails
+      for (String email in parentEmails) {
+        QuerySnapshot userSnapshot = await _db
+            .collection('users')
+            .where('email', isEqualTo: email)
+            .where('role', isEqualTo: 'student_parent')
+            .limit(1)
+            .get();
+
+        if (userSnapshot.docs.isNotEmpty) {
+          parentIds.add(userSnapshot.docs.first.id);
+        }
+      }
+    } catch (e) {
+      print('Error getting parent IDs for age group: $e');
+    }
+    return parentIds;
   }
 }

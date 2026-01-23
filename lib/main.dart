@@ -28,9 +28,12 @@ import 'views/admin/schedule_class_view.dart';
 import 'views/admin/admin_students_view.dart';
 import 'views/admin/admin_coaches_view.dart';
 import 'views/admin/class_details_view.dart';
+import 'views/admin/send_notification_view.dart';
 import 'views/splash/splash_view.dart';
 import 'views/finance/finance_view.dart';
 import 'views/parent/parent_schedule_view.dart';
+import 'views/notifications/notifications_view.dart';
+import 'services/notification_service.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 Future<void> main() async {
@@ -40,6 +43,9 @@ Future<void> main() async {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
     );
+
+    // Initialize notification service
+    await NotificationService().initialize();
   } on FirebaseException catch (e) {
     if (e.code != 'duplicate-app') {
       rethrow;
@@ -97,6 +103,8 @@ class MyApp extends StatelessWidget {
         '/finance': (context) => const FinanceView(),
         '/admin_students': (context) => const AdminStudentsView(),
         '/admin_coaches': (context) => const AdminCoachesView(),
+        '/notifications': (context) => const NotificationsView(),
+        '/send_notification': (context) => const SendNotificationView(),
       },
       onGenerateRoute: (settings) {
         // Handle /class_details route with dynamic data fetching
