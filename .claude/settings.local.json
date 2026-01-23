@@ -7,7 +7,9 @@
       "Bash(flutter pub get:*)",
       "Bash(dart analyze:*)",
       "Bash(curl:*)",
-      "Bash(del \"e:\\\\flutter\\\\littlekickersapp\\\\.git\\\\index.lock\")"
+      "Bash(del \"e:\\\\flutter\\\\littlekickersapp\\\\.git\\\\index.lock\")",
+      "Bash(findstr:*)",
+      "Bash(xargs:*)"
     ]
   }
 }

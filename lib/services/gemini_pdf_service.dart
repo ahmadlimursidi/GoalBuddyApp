@@ -8,9 +8,9 @@ class GeminiService {
   late final GenerativeModel _model;
 
   GeminiService() {
-    // UPDATED: Using the latest Gemini 3 Flash Preview model
+    // Using Gemini 3.0 Flash model
     _model = GenerativeModel(
-      model: 'gemini-3-flash-preview', 
+      model: 'gemini-3.0-flash-preview',
       apiKey: _apiKey,
     );
   }

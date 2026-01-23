@@ -103,8 +103,11 @@ IMPORTANT RULES:
 
 7. Use these colors:
    - Players: "#FF0000" (red), "#0000FF" (blue), "#00FF00" (green), "#FFFF00" (yellow)
+   - Coaches: "#808080" (grey)
    - Balls: "#FFFFFF" (white)
    - Cones: "#FFA500" (orange)
+   - Skittles (flat cones): "#FF6B6B" (coral) - render as smaller circles
+   - Hoops: "#9B59B6" (purple) - render as rings/circles
    - Goals: "#FFD700" (gold)
 
 RETURN ONLY THIS JSON STRUCTURE (no extra text):
@@ -138,6 +141,21 @@ RETURN ONLY THIS JSON STRUCTURE (no extra text):
       "type": "cone",
       "color": "#FFA500",
       "position": {"x": 0.5, "y": 0.5}
+    },
+    {
+      "type": "skittle",
+      "color": "#FF6B6B",
+      "position": {"x": 0.3, "y": 0.5}
+    },
+    {
+      "type": "hoop",
+      "color": "#9B59B6",
+      "position": {"x": 0.7, "y": 0.5}
+    },
+    {
+      "type": "coach",
+      "color": "#808080",
+      "position": {"x": 0.1, "y": 0.5}
     }
   ]
 }

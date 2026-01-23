@@ -99,7 +99,7 @@ class _PdfAutofillButtonState extends State<PdfAutofillButton> {
         icon: _isLoading 
             ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) 
             : const Icon(Icons.picture_as_pdf),
-        label: Text(_isLoading ? "Gemini 3 is reading..." : "Autofill from PDF"),
+        label: Text(_isLoading ? "AI is reading..." : "Autofill from PDF"),
       ),
     );
   }

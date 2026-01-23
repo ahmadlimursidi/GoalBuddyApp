@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:lottie/lottie.dart';
+import 'dart:convert';
 import '../../config/theme.dart';
 import '../../view_models/drill_library_view_model.dart';
 import '../../widgets/pdf_viewer_widget.dart';
+import '../../widgets/drill_animation_player.dart';
+import '../../models/drill_animation_data.dart';
 
 class ActivityDetailView extends StatelessWidget {
   final TemplateActivity activity;
@@ -131,8 +134,21 @@ class ActivityDetailView extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Animation/Visual
-                  if (activity.drillData.animationUrl != null &&
+                  // Debug: Log animation data received
+                  Builder(builder: (context) {
+                    print('🎬 [ActivityDetailView] Activity: ${activity.drillData.title}');
+                    print('   - animationJson: ${activity.drillData.animationJson != null ? "${activity.drillData.animationJson!.length} chars" : "null"}');
+                    print('   - animationUrl: ${activity.drillData.animationUrl}');
+                    print('   - visualType: ${activity.drillData.visualType}');
+                    return const SizedBox.shrink();
+                  }),
+
+                  // Animation/Visual - Check for AI-generated animation first, then manual upload
+                  if (activity.drillData.animationJson != null &&
+                      activity.drillData.animationJson!.isNotEmpty) ...[
+                    _buildAIAnimationDisplay(activity.drillData.animationJson!),
+                    const SizedBox(height: 20),
+                  ] else if (activity.drillData.animationUrl != null &&
                       activity.drillData.animationUrl!.isNotEmpty) ...[
                     Container(
                       height: 200,
@@ -430,6 +446,83 @@ class ActivityDetailView extends StatelessWidget {
         ),
       ],
     );
+  }
+
+  /// Builds the AI-generated animation display using DrillAnimationPlayer
+  Widget _buildAIAnimationDisplay(String animationJson) {
+    try {
+      final animationData = DrillAnimationData.fromJson(jsonDecode(animationJson));
+      return Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.1),
+              blurRadius: 8,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: DrillAnimationPlayer(
+                animationData: animationData,
+                width: double.infinity,
+                height: 220,
+              ),
+            ),
+            if (animationData.description.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: Row(
+                  children: [
+                    const Icon(Icons.auto_awesome, color: Colors.deepPurple, size: 16),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        animationData.description,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey[600],
+                          fontStyle: FontStyle.italic,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ],
+        ),
+      );
+    } catch (e) {
+      // If parsing fails, show an error state
+      return Container(
+        height: 200,
+        width: double.infinity,
+        decoration: BoxDecoration(
+          color: Colors.grey[100],
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.error_outline, size: 48, color: Colors.grey[400]),
+              const SizedBox(height: 8),
+              Text(
+                'Failed to load animation',
+                style: TextStyle(color: Colors.grey[600]),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
   }
 
   Widget _buildAnimationDisplay(String? animationUrl) {

@@ -924,6 +924,7 @@ class _CreateSessionTemplateViewState extends State<CreateSessionTemplateView> {
                         itemCount: _drills.length,
                         itemBuilder: (context, index) {
                           return DrillFormCard(
+                            key: ValueKey(_drills[index].hashCode),
                             drill: _drills[index],
                             index: index,
                             onRemove: () => setState(() => _drills.removeAt(index)),

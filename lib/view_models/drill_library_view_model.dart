@@ -90,6 +90,17 @@ class DrillLibraryViewModel extends ChangeNotifier {
 
         for (int i = 0; i < drills.length; i++) {
           final drillMap = drills[i] as Map<String, dynamic>;
+
+          // Debug: Log animation data from Firestore
+          final animJson = drillMap['animationJson'];
+          final animUrl = drillMap['animationUrl'];
+          final visType = drillMap['visualType'];
+          print('🔍 [watchActivities] Drill "$templateTitle" #$i:');
+          print('   - animationJson: ${animJson != null ? "${animJson.toString().length} chars" : "null"}');
+          print('   - animationUrl: $animUrl');
+          print('   - visualType: $visType');
+          print('   - All keys in drillMap: ${drillMap.keys.toList()}');
+
           final drillData = DrillData(
             title: drillMap['title'] ?? 'Untitled Drill',
             duration: drillMap['duration']?.toString() ?? '5',
@@ -99,6 +110,8 @@ class DrillLibraryViewModel extends ChangeNotifier {
             progressionHarder: drillMap['progression_harder'] ?? '',
             learningGoals: drillMap['learning_goals'] ?? '',
             animationUrl: drillMap['animationUrl'],
+            animationJson: drillMap['animationJson'],
+            visualType: drillMap['visualType'],
           );
 
           activities.add(TemplateActivity(
@@ -141,6 +154,16 @@ class DrillLibraryViewModel extends ChangeNotifier {
 
         for (int i = 0; i < drills.length; i++) {
           final drillMap = drills[i] as Map<String, dynamic>;
+
+          // Debug: Log animation data from Firestore
+          final animJson = drillMap['animationJson'];
+          final animUrl = drillMap['animationUrl'];
+          final visType = drillMap['visualType'];
+          print('🔍 [loadActivities] Drill "$templateTitle" #$i:');
+          print('   - animationJson: ${animJson != null ? "${animJson.toString().length} chars" : "null"}');
+          print('   - animationUrl: $animUrl');
+          print('   - visualType: $visType');
+
           final drillData = DrillData(
             title: drillMap['title'] ?? 'Untitled Drill',
             duration: drillMap['duration']?.toString() ?? '5',
@@ -150,6 +173,8 @@ class DrillLibraryViewModel extends ChangeNotifier {
             progressionHarder: drillMap['progression_harder'] ?? '',
             learningGoals: drillMap['learning_goals'] ?? '',
             animationUrl: drillMap['animationUrl'],
+            animationJson: drillMap['animationJson'],
+            visualType: drillMap['visualType'],
           );
 
           _allActivities.add(TemplateActivity(

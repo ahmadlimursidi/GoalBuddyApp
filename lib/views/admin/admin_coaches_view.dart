@@ -237,7 +237,8 @@ class _AdminCoachesViewState extends State<AdminCoachesView> {
                         itemBuilder: (context, index) {
                           var coachDoc = coaches[index];
                           var coachData = coachDoc.data() as Map<String, dynamic>;
-                          return _buildCoachCard(coachData);
+                          // Pass document ID for delete/edit operations
+                          return _buildCoachCard(coachData, coachDoc.id);
                         },
                       );
                     },
@@ -376,7 +377,7 @@ class _AdminCoachesViewState extends State<AdminCoachesView> {
     );
   }
 
-  Widget _buildCoachCard(Map<String, dynamic> data) {
+  Widget _buildCoachCard(Map<String, dynamic> data, String docId) {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
@@ -447,9 +448,9 @@ class _AdminCoachesViewState extends State<AdminCoachesView> {
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               onSelected: (value) {
                 if (value == 'edit') {
-                  _editCoach(data);
+                  _editCoach(data, docId);
                 } else if (value == 'delete') {
-                  _deleteCoach(data);
+                  _deleteCoach(data, docId);
                 }
               },
               itemBuilder: (context) => [
@@ -497,18 +498,14 @@ class _AdminCoachesViewState extends State<AdminCoachesView> {
     );
   }
 
-  void _editCoach(Map<String, dynamic> coachData) {
-    String? coachEmail = coachData['email'] as String?;
-    if (coachEmail == null) {
-      _showErrorSnackBar('Unable to edit coach');
-      return;
-    }
-
+  void _editCoach(Map<String, dynamic> coachData, String docId) {
     // Pre-fill form with existing data
     _nameController.text = coachData['name'] ?? '';
-    _emailController.text = coachEmail;
+    _emailController.text = coachData['email'] ?? '';
     _phoneController.text = coachData['phone'] ?? '';
     _rateController.text = coachData['ratePerHour']?.toString() ?? '';
+
+    print('✏️ [EDIT] Editing coach with docId: $docId');
 
     // Show edit dialog
     showDialog(
@@ -552,7 +549,8 @@ class _AdminCoachesViewState extends State<AdminCoachesView> {
               }
 
               try {
-                await FirebaseFirestore.instance.collection('coaches').doc(coachEmail).update({
+                // Update coach document using the actual document ID
+                await FirebaseFirestore.instance.collection('users').doc(docId).update({
                   'name': _nameController.text.trim(),
                   'phone': _phoneController.text.trim(),
                   'ratePerHour': double.tryParse(_rateController.text.trim()) ?? 0.0,
@@ -579,14 +577,10 @@ class _AdminCoachesViewState extends State<AdminCoachesView> {
     );
   }
 
-  void _deleteCoach(Map<String, dynamic> coachData) {
-    String? coachEmail = coachData['email'] as String?;
+  void _deleteCoach(Map<String, dynamic> coachData, String docId) {
     String coachName = coachData['name'] ?? 'this coach';
 
-    if (coachEmail == null) {
-      _showErrorSnackBar('Unable to delete coach');
-      return;
-    }
+    print('🗑️ [DELETE] Preparing to delete coach with docId: $docId');
 
     // Show confirmation dialog
     showDialog(
@@ -636,14 +630,18 @@ class _AdminCoachesViewState extends State<AdminCoachesView> {
           ElevatedButton(
             onPressed: () async {
               try {
-                // Delete coach document
-                await FirebaseFirestore.instance.collection('coaches').doc(coachEmail).delete();
+                print('🗑️ [DELETE] Starting delete for coach docId: $docId');
+
+                // Delete from users collection using the document ID
+                await FirebaseFirestore.instance.collection('users').doc(docId).delete();
+                print('🗑️ [DELETE] Deleted from users collection');
 
                 if (mounted) {
                   Navigator.pop(context);
                   _showSuccessSnackBar('Coach deleted successfully');
                 }
               } catch (e) {
+                print('🗑️ [DELETE] Error: $e');
                 if (mounted) {
                   Navigator.pop(context);
                   _showErrorSnackBar('Error deleting coach: $e');
