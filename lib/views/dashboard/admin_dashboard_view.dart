@@ -237,19 +237,38 @@ class _AdminDashboardViewState extends State<AdminDashboardView> {
                       }
 
                       if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                        return _buildEmptyState();
+                        return RefreshIndicator(
+                          onRefresh: () async {
+                            setState(() {});
+                          },
+                          color: AppTheme.primaryRed,
+                          child: SingleChildScrollView(
+                            physics: const AlwaysScrollableScrollPhysics(),
+                            child: SizedBox(
+                              height: MediaQuery.of(context).size.height * 0.5,
+                              child: _buildEmptyState(),
+                            ),
+                          ),
+                        );
                       }
 
                       final docs = snapshot.data!.docs;
 
-                      return ListView.builder(
-                        itemCount: docs.length,
-                        padding: const EdgeInsets.only(bottom: 80), // Space for FAB
-                        itemBuilder: (context, index) {
-                          final doc = docs[index];
-                          final data = doc.data() as Map<String, dynamic>;
-                          return _buildClassCard(context, doc.id, data);
+                      return RefreshIndicator(
+                        onRefresh: () async {
+                          setState(() {});
                         },
+                        color: AppTheme.primaryRed,
+                        child: ListView.builder(
+                          physics: const AlwaysScrollableScrollPhysics(),
+                          itemCount: docs.length,
+                          padding: const EdgeInsets.only(bottom: 80), // Space for FAB
+                          itemBuilder: (context, index) {
+                            final doc = docs[index];
+                            final data = doc.data() as Map<String, dynamic>;
+                            return _buildClassCard(context, doc.id, data);
+                          },
+                        ),
                       );
                     },
                   ),
@@ -561,17 +580,17 @@ class _AdminDashboardViewState extends State<AdminDashboardView> {
                       margin: const EdgeInsets.only(top: 12, bottom: 20),
                       decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(2)),
                     ),
-                    _buildBottomSheetItem(Icons.library_add, "Create Template", "Build new curriculum", () {
+                    _buildBottomSheetItem(Icons.library_add, "Upload Session Plan", "Build new curriculum", () {
                       Navigator.pop(context);
                       _resetFab();
                       Navigator.pushNamed(context, '/create_session_template');
                     }),
-                    _buildBottomSheetItem(Icons.playlist_add_check, "Manage Sessions", "View all templates", () {
+                    _buildBottomSheetItem(Icons.playlist_add_check, "Manage Sessions", "View all session plans", () {
                       Navigator.pop(context);
                       _resetFab();
                       Navigator.push(context, MaterialPageRoute(builder: (context) => const SessionTemplatesListView()));
                     }),
-                    _buildBottomSheetItem(Icons.calendar_month, "Schedule Class", "Assign template to coach", () {
+                    _buildBottomSheetItem(Icons.calendar_month, "Schedule Class", "Assign session plan to coach", () {
                       Navigator.pop(context);
                       _resetFab();
                       Navigator.pushNamed(context, '/schedule_class');

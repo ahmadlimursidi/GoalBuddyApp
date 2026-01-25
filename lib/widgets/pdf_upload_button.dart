@@ -45,6 +45,20 @@ class _PdfAutofillButtonState extends State<PdfAutofillButton> {
         try {
           Map<String, dynamic> data = jsonDecode(cleanJson);
 
+          // Check if Gemini returned an error (invalid document)
+          if (data.containsKey('error') && data['error'] == 'INVALID_DOCUMENT') {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(data['message'] ?? 'This is not a valid Little Kickers lesson plan.'),
+                  backgroundColor: Colors.red,
+                ),
+              );
+              setState(() => _isLoading = false);
+            }
+            return;
+          }
+
           // Upload PDF to Firebase Storage
           print('📤 Starting PDF upload to Firebase Storage...');
           String? pdfUrl = await _storageService.uploadPdfFromBytes(

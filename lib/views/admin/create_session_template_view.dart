@@ -716,7 +716,7 @@ class _CreateSessionTemplateViewState extends State<CreateSessionTemplateView> {
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FA), // Light grey background
       appBar: AppBar(
-        title: const Text("New Template"),
+        title: const Text("New Session Plan"),
         backgroundColor: AppTheme.primaryRed,
         foregroundColor: Colors.white,
         elevation: 0,
@@ -754,7 +754,7 @@ class _CreateSessionTemplateViewState extends State<CreateSessionTemplateView> {
                 ),
                 const SizedBox(height: 8),
                 const Text(
-                  "Session Template",
+                  "Session Plan",
                   style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 20),
@@ -851,7 +851,7 @@ class _CreateSessionTemplateViewState extends State<CreateSessionTemplateView> {
                         children: [
                           const Text("General Info", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppTheme.darkText)),
                           const SizedBox(height: 16),
-                          _buildTextField(_titleController, "Template Title", Icons.title),
+                          _buildTextField(_titleController, "Sessi Title", Icons.title),
                           const SizedBox(height: 16),
                           DropdownButtonFormField<String>(
                             initialValue: _selectedAgeGroup,
@@ -960,7 +960,7 @@ class _CreateSessionTemplateViewState extends State<CreateSessionTemplateView> {
                           }
 
                           try {
-                            print('💾 Saving template with pdfUrl: $_pdfUrl, pdfFileName: $_pdfFileName');
+                            print('💾 Saving Session Plan with pdfUrl: $_pdfUrl, pdfFileName: $_pdfFileName');
                             bool success = await viewModel.createTemplate(
                               title: _titleController.text.trim(),
                               ageGroup: _selectedAgeGroup!,
@@ -976,14 +976,14 @@ class _CreateSessionTemplateViewState extends State<CreateSessionTemplateView> {
                               Navigator.pop(context);
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(
-                                  content: Text("Template Saved Successfully!"),
+                                  content: Text("Session Plan Saved Successfully!"),
                                   backgroundColor: Colors.green,
                                 ),
                               );
                             } else {
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(
-                                  content: Text("Failed to save template. Please try again."),
+                                  content: Text("Failed to save Session Plan. Please try again."),
                                   backgroundColor: Colors.red,
                                   duration: Duration(seconds: 4),
                                 ),
@@ -1009,7 +1009,7 @@ class _CreateSessionTemplateViewState extends State<CreateSessionTemplateView> {
                         ),
                         child: viewModel.isLoading
                             ? const CircularProgressIndicator(color: Colors.white)
-                            : const Text("Save Template", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                            : const Text("Save Session Plan", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                       ),
                     ),
                     const SizedBox(height: 40),

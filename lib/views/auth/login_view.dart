@@ -208,7 +208,10 @@ class _LoginViewState extends State<LoginView> with SingleTickerProviderStateMix
                   TextButton(
                     onPressed: () {
                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text("Try admin@littlekickers.com, coach@littlekickers.com, or parent@example.com"))
+                          const SnackBar(
+                            content: Text("Please contact the admin at admin@lk.com to reset your password"),
+                            duration: Duration(seconds: 4),
+                          )
                        );
                     },
                     child: const Text("Forgot Password?", style: TextStyle(color: Colors.grey)),

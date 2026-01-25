@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../config/theme.dart';
+import '../coach/coach_profile_view.dart';
 
 class FinanceView extends StatefulWidget {
   const FinanceView({super.key});
@@ -392,33 +393,44 @@ class _CoachPaymentsScreenState extends State<CoachPaymentsScreen> {
                       ),
                       // Coach List
                       Expanded(
-                        child: ListView.builder(
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                          itemCount: coaches.length,
-                          itemBuilder: (context, index) {
-                            final coachDoc = coaches[index];
-                            final coachData = coachDoc.data() as Map<String, dynamic>;
-                            final coachId = coachDoc.id;
-                            final coachName = coachData['name'] ?? 'Unknown Coach';
-                            final rawRate = coachData['ratePerHour'];
-                            final double coachRate = (rawRate is num) ? rawRate.toDouble() : 50.0;
-
-                            final stats = coachStats[coachId] ?? {};
-
-                            return _buildCoachPaymentCard(
-                              context,
-                              coachName,
-                              (stats['totalPayment'] as num?)?.toDouble() ?? 0,
-                              (stats['totalSessions'] as int?) ?? 0,
-                              coachRate,
-                              coachId,
-                              monthlyPayment: (stats['monthlyPayment'] as num?)?.toDouble() ?? 0,
-                              yearlyPayment: (stats['yearlyPayment'] as num?)?.toDouble() ?? 0,
-                              monthlySessions: (stats['monthlySessions'] as int?) ?? 0,
-                              yearlySessions: (stats['yearlySessions'] as int?) ?? 0,
-                              selectedMonth: selectedDate,
-                            );
+                        child: RefreshIndicator(
+                          onRefresh: () async {
+                            setState(() {
+                              _cachedCoaches = null;
+                              _cachedSessions = null;
+                              _cachedPastSessions = null;
+                            });
                           },
+                          color: AppTheme.primaryRed,
+                          child: ListView.builder(
+                            physics: const AlwaysScrollableScrollPhysics(),
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            itemCount: coaches.length,
+                            itemBuilder: (context, index) {
+                              final coachDoc = coaches[index];
+                              final coachData = coachDoc.data() as Map<String, dynamic>;
+                              final coachId = coachDoc.id;
+                              final coachName = coachData['name'] ?? 'Unknown Coach';
+                              final rawRate = coachData['ratePerHour'];
+                              final double coachRate = (rawRate is num) ? rawRate.toDouble() : 50.0;
+
+                              final stats = coachStats[coachId] ?? {};
+
+                              return _buildCoachPaymentCard(
+                                context,
+                                coachName,
+                                (stats['totalPayment'] as num?)?.toDouble() ?? 0,
+                                (stats['totalSessions'] as int?) ?? 0,
+                                coachRate,
+                                coachId,
+                                monthlyPayment: (stats['monthlyPayment'] as num?)?.toDouble() ?? 0,
+                                yearlyPayment: (stats['yearlyPayment'] as num?)?.toDouble() ?? 0,
+                                monthlySessions: (stats['monthlySessions'] as int?) ?? 0,
+                                yearlySessions: (stats['yearlySessions'] as int?) ?? 0,
+                                selectedMonth: selectedDate,
+                              );
+                            },
+                          ),
                         ),
                       ),
                     ],
@@ -559,36 +571,67 @@ class _CoachPaymentsScreenState extends State<CoachPaymentsScreen> {
           children: [
             Row(
               children: [
-                CircleAvatar(
-                  backgroundColor: AppTheme.primaryRed.withOpacity(0.1),
-                  child: Text(
-                    name.isNotEmpty ? name[0].toUpperCase() : 'C',
-                    style: const TextStyle(
-                      color: AppTheme.primaryRed,
-                      fontWeight: FontWeight.bold,
+                // Tappable coach avatar and name - navigates to coach profile
+                Expanded(
+                  child: InkWell(
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => CoachProfileView(coachId: id),
+                        ),
+                      );
+                    },
+                    borderRadius: BorderRadius.circular(12),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      child: Row(
+                        children: [
+                          CircleAvatar(
+                            backgroundColor: AppTheme.primaryRed.withOpacity(0.1),
+                            child: Text(
+                              name.isNotEmpty ? name[0].toUpperCase() : 'C',
+                              style: const TextStyle(
+                                color: AppTheme.primaryRed,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Flexible(
+                                      child: Text(
+                                        name,
+                                        style: const TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.bold,
+                                          color: AppTheme.darkText,
+                                        ),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Icon(Icons.chevron_right, size: 18, color: Colors.grey[400]),
+                                  ],
+                                ),
+                                Text(
+                                  "Tap to view profile",
+                                  style: TextStyle(fontSize: 11, color: Colors.grey[500]),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        name,
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: AppTheme.darkText,
-                        ),
-                      ),
-                      Text(
-                        "ID: ${id.substring(0, 6)}...",
-                        style: TextStyle(fontSize: 12, color: Colors.grey[500]),
-                      ),
-                    ],
-                  ),
-                ),
+                const SizedBox(width: 8),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   decoration: BoxDecoration(
@@ -1185,32 +1228,41 @@ class _StudentListWithPaymentStreamState extends State<_StudentListWithPaymentSt
 
             // Student List
             Expanded(
-              child: ListView.builder(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                itemCount: students.length,
-                itemBuilder: (context, index) {
-                  final student = students[index];
-                  final data = student.data() as Map<String, dynamic>;
-                  final paymentStatus = paymentStatuses[student.id] ?? 'unpaid';
-                  final parentEmail = parentEmails[student.id] ?? 'No Email';
-                  final thisStudentPayment = studentPaymentData[student.id];
-
-                  return _buildStudentFeeCard(
-                    context,
-                    student,
-                    data,
-                    paymentStatus,
-                    parentEmail,
-                    monthYear,
-                    receiptUrl: thisStudentPayment?['receiptUrl'] as String?,
-                    receiptFileName: thisStudentPayment?['receiptFileName'] as String?,
-                    receiptType: thisStudentPayment?['receiptType'] as String?,
-                    paymentAmount: (thisStudentPayment?['amount'] as num?)?.toDouble(),
-                    aiExtractedAmount: (thisStudentPayment?['aiExtractedAmount'] as num?)?.toDouble(),
-                    aiExtractedReference: thisStudentPayment?['aiExtractedReference'] as String?,
-                    aiExtractedPaymentMethod: thisStudentPayment?['aiExtractedPaymentMethod'] as String?,
-                  );
+              child: RefreshIndicator(
+                onRefresh: () async {
+                  setState(() {
+                    _cachedPaymentData = null;
+                  });
                 },
+                color: AppTheme.primaryRed,
+                child: ListView.builder(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  itemCount: students.length,
+                  itemBuilder: (context, index) {
+                    final student = students[index];
+                    final data = student.data() as Map<String, dynamic>;
+                    final paymentStatus = paymentStatuses[student.id] ?? 'unpaid';
+                    final parentEmail = parentEmails[student.id] ?? 'No Email';
+                    final thisStudentPayment = studentPaymentData[student.id];
+
+                    return _buildStudentFeeCard(
+                      context,
+                      student,
+                      data,
+                      paymentStatus,
+                      parentEmail,
+                      monthYear,
+                      receiptUrl: thisStudentPayment?['receiptUrl'] as String?,
+                      receiptFileName: thisStudentPayment?['receiptFileName'] as String?,
+                      receiptType: thisStudentPayment?['receiptType'] as String?,
+                      paymentAmount: (thisStudentPayment?['amount'] as num?)?.toDouble(),
+                      aiExtractedAmount: (thisStudentPayment?['aiExtractedAmount'] as num?)?.toDouble(),
+                      aiExtractedReference: thisStudentPayment?['aiExtractedReference'] as String?,
+                      aiExtractedPaymentMethod: thisStudentPayment?['aiExtractedPaymentMethod'] as String?,
+                    );
+                  },
+                ),
               ),
             ),
           ],
@@ -1374,34 +1426,65 @@ class _StudentListWithPaymentStreamState extends State<_StudentListWithPaymentSt
           children: [
             Row(
               children: [
-                CircleAvatar(
-                  radius: 14,
-                  backgroundColor: statusColor.withOpacity(0.1),
-                  child: Icon(
-                    statusIcon,
-                    color: statusColor,
-                    size: 16,
-                  ),
-                ),
-                const SizedBox(width: 12),
                 Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        data['name'] ?? 'Unknown',
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 14,
-                          color: AppTheme.darkText,
-                        ),
+                  child: InkWell(
+                    onTap: () {
+                      Navigator.pushNamed(
+                        context,
+                        '/student_profile',
+                        arguments: {
+                          'studentId': studentDoc.id,
+                          'studentName': data['name'] ?? 'Unknown',
+                          'isParentViewing': false,
+                        },
+                      );
+                    },
+                    borderRadius: BorderRadius.circular(8),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      child: Row(
+                        children: [
+                          CircleAvatar(
+                            radius: 14,
+                            backgroundColor: statusColor.withOpacity(0.1),
+                            child: Icon(
+                              statusIcon,
+                              color: statusColor,
+                              size: 16,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Flexible(
+                                      child: Text(
+                                        data['name'] ?? 'Unknown',
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 14,
+                                          color: AppTheme.darkText,
+                                        ),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Icon(Icons.chevron_right, size: 16, color: Colors.grey[400]),
+                                  ],
+                                ),
+                                Text(
+                                  parentEmail,
+                                  style: TextStyle(fontSize: 11, color: Colors.grey[600]),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
                       ),
-                      const SizedBox(height: 2),
-                      Text(
-                        parentEmail,
-                        style: TextStyle(fontSize: 11, color: Colors.grey[600]),
-                      ),
-                    ],
+                    ),
                   ),
                 ),
                 // Receipt indicator

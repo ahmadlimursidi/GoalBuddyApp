@@ -9,7 +9,9 @@
       "Bash(curl:*)",
       "Bash(del \"e:\\\\flutter\\\\littlekickersapp\\\\.git\\\\index.lock\")",
       "Bash(findstr:*)",
-      "Bash(xargs:*)"
+      "Bash(xargs:*)",
+      "Bash(del \"e:\\\\flutter\\\\littlekickersapp\\\\lib\\\\views\\\\admin\\\\admin_coach_profile_view.dart\")",
+      "Bash(flutter pub upgrade:*)"
     ]
   }
 }

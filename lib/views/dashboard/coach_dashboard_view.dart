@@ -110,7 +110,13 @@ class _CoachDashboardViewState extends State<CoachDashboardView> {
                 return status != 'COMPLETED';
               }).length;
 
-          return CustomScrollView(
+          return RefreshIndicator(
+            onRefresh: () async {
+              viewModel.refreshDashboard();
+            },
+            color: AppTheme.primaryRed,
+            child: CustomScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
             slivers: [
               // 1. Modern Sliver App Bar Header
               SliverAppBar(
@@ -370,6 +376,7 @@ class _CoachDashboardViewState extends State<CoachDashboardView> {
               // Bottom padding
               const SliverToBoxAdapter(child: SizedBox(height: 40)),
             ],
+          ),
           );
                 },
               );

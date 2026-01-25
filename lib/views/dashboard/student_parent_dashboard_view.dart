@@ -1016,7 +1016,7 @@ class _StudentParentDashboardViewState extends State<StudentParentDashboardView>
   }
 
   // Show payment confirmation dialog with receipt upload
-  void _showPaymentConfirmationDialog(BuildContext context, StudentParentViewModel viewModel) {
+  void _showPaymentConfirmationDialog(BuildContext context, StudentParentViewModel viewModel) async {
     // Check if studentId is available before proceeding
     if (viewModel.studentId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1031,6 +1031,131 @@ class _StudentParentDashboardViewState extends State<StudentParentDashboardView>
     final now = DateTime.now();
     final monthYear = "${_getMonthName(now.month)} ${now.year}";
 
+    // Check current payment status
+    final paymentStatus = await _getPaymentStatus(viewModel.studentId);
+
+    if (!context.mounted) return;
+
+    // If payment is pending or paid, show status dialog instead
+    if (paymentStatus == 'pending') {
+      showDialog(
+        context: context,
+        builder: (BuildContext dialogContext) {
+          return AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(Icons.hourglass_top, color: Colors.orange, size: 20),
+                ),
+                const SizedBox(width: 12),
+                const Expanded(
+                  child: Text(
+                    "Payment Pending",
+                    style: TextStyle(fontSize: 18),
+                  ),
+                ),
+              ],
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  "Your payment for $monthYear is currently pending approval.",
+                  style: const TextStyle(fontSize: 15),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  "The admin will review and confirm your payment soon. You will be notified once it's approved.",
+                  style: TextStyle(color: Colors.grey[600], fontSize: 14),
+                ),
+              ],
+            ),
+            actions: [
+              ElevatedButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.orange,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+                child: const Text("OK"),
+              ),
+            ],
+          );
+        },
+      );
+      return;
+    }
+
+    if (paymentStatus == 'paid') {
+      showDialog(
+        context: context,
+        builder: (BuildContext dialogContext) {
+          return AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.green.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(Icons.check_circle, color: Colors.green, size: 20),
+                ),
+                const SizedBox(width: 12),
+                const Expanded(
+                  child: Text(
+                    "Payment Confirmed",
+                    style: TextStyle(fontSize: 18),
+                  ),
+                ),
+              ],
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  "Your payment for $monthYear has been confirmed.",
+                  style: const TextStyle(fontSize: 15),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  "Thank you for your payment!",
+                  style: TextStyle(color: Colors.grey[600], fontSize: 14),
+                ),
+              ],
+            ),
+            actions: [
+              ElevatedButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.green,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+                child: const Text("OK"),
+              ),
+            ],
+          );
+        },
+      );
+      return;
+    }
+
+    // Show upload dialog only for unpaid status
     showDialog(
       context: context,
       builder: (BuildContext dialogContext) {
@@ -1540,6 +1665,7 @@ class _PaymentConfirmationDialogState extends State<_PaymentConfirmationDialog> 
   String? _extractedReference;
   String? _extractedPaymentMethod;
   bool _hasAnalyzed = false;
+  String? _errorMessage; // Error message to show in dialog
 
   @override
   void dispose() {
@@ -1588,6 +1714,7 @@ class _PaymentConfirmationDialogState extends State<_PaymentConfirmationDialog> 
 
     setState(() {
       _isAnalyzing = true;
+      _errorMessage = null;
     });
 
     try {
@@ -1610,35 +1737,29 @@ class _PaymentConfirmationDialogState extends State<_PaymentConfirmationDialog> 
           _extractedPaymentMethod = result.paymentMethod;
           _hasAnalyzed = true;
           _isAnalyzing = false;
+          _errorMessage = null;
         });
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(result.amount != null
-                ? "AI detected amount: RM ${result.amount!.toStringAsFixed(2)}"
-                : "Receipt analyzed - please enter amount manually"),
-            backgroundColor: result.amount != null ? AppTheme.pitchGreen : Colors.orange,
-            duration: const Duration(seconds: 2),
-          ),
-        );
       } else {
+        // Invalid file - clear selection and show error in dialog
         setState(() {
-          _hasAnalyzed = true;
+          _selectedFileBytes = null;
+          _selectedFileName = null;
+          _selectedFileType = null;
+          _hasAnalyzed = false;
           _isAnalyzing = false;
+          _errorMessage = result.error ?? 'Invalid file. Please upload a valid payment receipt.';
         });
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text("Could not read receipt: ${result.error ?? 'Unknown error'}"),
-            backgroundColor: Colors.orange,
-          ),
-        );
       }
     } catch (e) {
       debugPrint("Error analyzing receipt: $e");
       if (mounted) {
         setState(() {
           _isAnalyzing = false;
-          _hasAnalyzed = true;
+          _hasAnalyzed = false;
+          _selectedFileBytes = null;
+          _selectedFileName = null;
+          _selectedFileType = null;
+          _errorMessage = "Error analyzing file. Please try again.";
         });
       }
     }
@@ -1869,6 +1990,35 @@ class _PaymentConfirmationDialogState extends State<_PaymentConfirmationDialog> 
                 ),
               ),
             ),
+
+            // Error message display
+            if (_errorMessage != null) ...[
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.red.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.red.withValues(alpha: 0.3)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.error_outline, color: Colors.red, size: 20),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        _errorMessage!,
+                        style: const TextStyle(
+                          color: Colors.red,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
 
             // Preview for images
             if (_selectedFileBytes != null &&

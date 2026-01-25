@@ -8,7 +8,14 @@ import '../../view_models/auth_view_model.dart';
 import '../../services/firestore_service.dart';
 
 class CoachProfileView extends StatelessWidget {
-  const CoachProfileView({super.key});
+  /// Optional: If provided, view this coach's profile (admin mode)
+  /// If null, view the current logged-in coach's own profile
+  final String? coachId;
+
+  const CoachProfileView({super.key, this.coachId});
+
+  /// Whether this is being viewed by an admin (not the coach themselves)
+  bool get isAdminView => coachId != null;
 
   @override
   Widget build(BuildContext context) {
@@ -16,7 +23,10 @@ class CoachProfileView extends StatelessWidget {
     final user = authViewModel.currentUser;
     final firestoreService = FirestoreService();
 
-    if (user == null) {
+    // Use provided coachId (admin view) or current user's ID (coach view)
+    final targetCoachId = coachId ?? user?.uid;
+
+    if (targetCoachId == null) {
       return const Scaffold(
         body: Center(
             child: CircularProgressIndicator(color: AppTheme.primaryRed)),
@@ -28,7 +38,7 @@ class CoachProfileView extends StatelessWidget {
       body: StreamBuilder<DocumentSnapshot>(
         stream: FirebaseFirestore.instance
             .collection('users')
-            .doc(user.uid)
+            .doc(targetCoachId)
             .snapshots(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
@@ -61,6 +71,13 @@ class CoachProfileView extends StatelessWidget {
                 backgroundColor: AppTheme.primaryRed,
                 elevation: 0,
                 stretch: true,
+                // Show back button when admin is viewing a coach's profile
+                leading: isAdminView
+                    ? IconButton(
+                        icon: const Icon(Icons.arrow_back, color: Colors.white),
+                        onPressed: () => Navigator.pop(context),
+                      )
+                    : null,
                 flexibleSpace: FlexibleSpaceBar(
                   stretchModes: const [
                     StretchMode.zoomBackground,
@@ -92,9 +109,9 @@ class CoachProfileView extends StatelessWidget {
                       ),
                       const SizedBox(height: 20),
 
-                      // Quick Actions
+                      // Quick Actions (only show full menu for coach, limited for admin)
                       _buildSectionCard(
-                        title: 'Quick Actions',
+                        title: isAdminView ? 'Session History' : 'Quick Actions',
                         icon: Icons.grid_view_rounded,
                         children: [
                           _buildActionTile(
@@ -107,30 +124,33 @@ class CoachProfileView extends StatelessWidget {
                               context,
                               MaterialPageRoute(
                                 builder: (context) =>
-                                    CoachPastSessionsView(coachId: user.uid),
+                                    CoachPastSessionsView(coachId: targetCoachId),
                               ),
                             ),
                           ),
-                          const SizedBox(height: 12),
-                          _buildActionTile(
-                            context,
-                            icon: Icons.sports_soccer_rounded,
-                            title: 'Drill Library',
-                            subtitle: 'Training drills',
-                            color: Colors.blueAccent,
-                            onTap: () =>
-                                Navigator.pushNamed(context, '/drill_library'),
-                          ),
-                          const SizedBox(height: 12),
-                          _buildActionTile(
-                            context,
-                            icon: Icons.menu_book_rounded,
-                            title: 'Resources',
-                            subtitle: 'Guides & Materials',
-                            color: Colors.purpleAccent,
-                            onTap: () =>
-                                Navigator.pushNamed(context, '/coach_resources'),
-                          ),
+                          // Only show Drill Library and Resources for the coach themselves
+                          if (!isAdminView) ...[
+                            const SizedBox(height: 12),
+                            _buildActionTile(
+                              context,
+                              icon: Icons.sports_soccer_rounded,
+                              title: 'Drill Library',
+                              subtitle: 'Training drills',
+                              color: Colors.blueAccent,
+                              onTap: () =>
+                                  Navigator.pushNamed(context, '/drill_library'),
+                            ),
+                            const SizedBox(height: 12),
+                            _buildActionTile(
+                              context,
+                              icon: Icons.menu_book_rounded,
+                              title: 'Resources',
+                              subtitle: 'Guides & Materials',
+                              color: Colors.purpleAccent,
+                              onTap: () =>
+                                  Navigator.pushNamed(context, '/coach_resources'),
+                            ),
+                          ],
                         ],
                       ),
                       const SizedBox(height: 20),
@@ -139,7 +159,7 @@ class CoachProfileView extends StatelessWidget {
                       StreamBuilder<QuerySnapshot>(
                         stream: FirebaseFirestore.instance
                             .collection('sessions')
-                            .where('coachId', isEqualTo: user.uid)
+                            .where('coachId', isEqualTo: targetCoachId)
                             .where('status', isEqualTo: 'Completed')
                             .snapshots(),
                         builder: (context, currentSessionsSnapshot) {
@@ -152,7 +172,7 @@ class CoachProfileView extends StatelessWidget {
                           return StreamBuilder<QuerySnapshot>(
                             stream: FirebaseFirestore.instance
                                 .collection('pastSessions')
-                                .where('coachId', isEqualTo: user.uid)
+                                .where('coachId', isEqualTo: targetCoachId)
                                 .snapshots(),
                             builder: (context, pastSessionsSnapshot) {
                               int pastCompletedCount = 0;
@@ -168,7 +188,7 @@ class CoachProfileView extends StatelessWidget {
 
                               return StreamBuilder<QuerySnapshot>(
                                 stream:
-                                    firestoreService.getCoachSessions(user.uid),
+                                    firestoreService.getCoachSessions(targetCoachId),
                                 builder: (context, upcomingSnapshot) {
                                   final upcomingCount = upcomingSnapshot
                                           .data?.docs
@@ -218,39 +238,40 @@ class CoachProfileView extends StatelessWidget {
                           );
                         },
                       ),
-                      const SizedBox(height: 20),
-
-                      // Account Actions
-                      _buildSectionCard(
-                        title: 'Account',
-                        icon: Icons.settings_outlined,
-                        children: [
-                          _buildActionTile(
-                            context,
-                            icon: Icons.lock_outline,
-                            title: 'Change Password',
-                            subtitle: 'Update your password',
-                            color: Colors.blueAccent,
-                            onTap: () => _showChangePasswordDialog(context),
-                          ),
-                          const SizedBox(height: 12),
-                          _buildActionTile(
-                            context,
-                            icon: Icons.logout_rounded,
-                            title: 'Sign Out',
-                            subtitle: 'Securely logout',
-                            color: Colors.redAccent,
-                            isDestructive: true,
-                            onTap: () async {
-                              await authViewModel.logout();
-                              if (context.mounted) {
-                                Navigator.pushNamedAndRemoveUntil(
-                                    context, '/', (route) => false);
-                              }
-                            },
-                          ),
-                        ],
-                      ),
+                      // Account Actions - only show for coach themselves, not admin view
+                      if (!isAdminView) ...[
+                        const SizedBox(height: 20),
+                        _buildSectionCard(
+                          title: 'Account',
+                          icon: Icons.settings_outlined,
+                          children: [
+                            _buildActionTile(
+                              context,
+                              icon: Icons.lock_outline,
+                              title: 'Change Password',
+                              subtitle: 'Update your password',
+                              color: Colors.blueAccent,
+                              onTap: () => _showChangePasswordDialog(context),
+                            ),
+                            const SizedBox(height: 12),
+                            _buildActionTile(
+                              context,
+                              icon: Icons.logout_rounded,
+                              title: 'Sign Out',
+                              subtitle: 'Securely logout',
+                              color: Colors.redAccent,
+                              isDestructive: true,
+                              onTap: () async {
+                                await authViewModel.logout();
+                                if (context.mounted) {
+                                  Navigator.pushNamedAndRemoveUntil(
+                                      context, '/', (route) => false);
+                                }
+                              },
+                            ),
+                          ],
+                        ),
+                      ],
                       const SizedBox(height: 40),
                     ],
                   ),

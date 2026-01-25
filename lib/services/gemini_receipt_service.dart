@@ -41,7 +41,15 @@ class GeminiReceiptService {
   Future<ReceiptData> extractFromImage(Uint8List imageBytes, String mimeType) async {
     try {
       final prompt = TextPart(
-        "Analyze this payment receipt image. Extract the following information:\n"
+        "First, determine if this image is a valid payment receipt or bank transfer confirmation. "
+        "A valid receipt should contain payment/transaction details such as: "
+        "- Amount transferred or paid "
+        "- Transaction/Reference number "
+        "- Date of transaction "
+        "- Bank or payment service branding "
+        "If the image is NOT a payment receipt (e.g., it's a photo of a person, selfie, random picture, screenshot of unrelated content, meme, etc.), "
+        'return ONLY this JSON: {"error": "INVALID_IMAGE", "message": "This image is not a valid payment receipt. Please upload a screenshot or photo of your bank transfer or payment confirmation."}\n\n'
+        "If it IS a valid payment receipt, extract the following information:\n"
         "1. Total amount paid (in Malaysian Ringgit RM or MYR)\n"
         "2. Payment date\n"
         "3. Reference/Transaction number\n"
@@ -82,7 +90,15 @@ class GeminiReceiptService {
   Future<ReceiptData> extractFromPdf(Uint8List pdfBytes) async {
     try {
       final prompt = TextPart(
-        "Analyze this payment receipt PDF. Extract the following information:\n"
+        "First, determine if this PDF is a valid payment receipt or bank transfer confirmation. "
+        "A valid receipt should contain payment/transaction details such as: "
+        "- Amount transferred or paid "
+        "- Transaction/Reference number "
+        "- Date of transaction "
+        "- Bank or payment service information "
+        "If the PDF is NOT a payment receipt (e.g., it's a lesson plan, invoice, random document, contract, etc.), "
+        'return ONLY this JSON: {"error": "INVALID_DOCUMENT", "message": "This PDF is not a valid payment receipt. Please upload a bank transfer or payment confirmation PDF."}\n\n'
+        "If it IS a valid payment receipt, extract the following information:\n"
         "1. Total amount paid (in Malaysian Ringgit RM or MYR)\n"
         "2. Payment date\n"
         "3. Reference/Transaction number\n"
@@ -131,6 +147,14 @@ class GeminiReceiptService {
         cleanJson = cleanJson.substring(0, cleanJson.length - 3);
       }
       cleanJson = cleanJson.trim();
+
+      // Check for error response (invalid document/image)
+      if (cleanJson.contains('"error"') && (cleanJson.contains('INVALID_IMAGE') || cleanJson.contains('INVALID_DOCUMENT'))) {
+        // Extract error message
+        final messageMatch = RegExp(r'"message"\s*:\s*"([^"]*)"').firstMatch(cleanJson);
+        final errorMessage = messageMatch?.group(1) ?? 'Invalid file uploaded. Please upload a valid payment receipt.';
+        return ReceiptData.error(errorMessage);
+      }
 
       // Parse JSON
       final Map<String, dynamic> json = _parseJsonString(cleanJson);

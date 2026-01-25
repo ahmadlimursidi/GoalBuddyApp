@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:lottie/lottie.dart';
+import 'package:audioplayers/audioplayers.dart';
 import 'dart:convert';
 import '../../view_models/active_session_view_model.dart';
 import '../../config/theme.dart';
@@ -19,11 +20,21 @@ class _ActiveSessionViewState extends State<ActiveSessionView> {
   bool _isInit = false;
   String? _sessionId;
   final DraggableScrollableController _sheetController = DraggableScrollableController();
+  final AudioPlayer _audioPlayer = AudioPlayer();
 
   @override
   void dispose() {
     _sheetController.dispose();
+    _audioPlayer.dispose();
     super.dispose();
+  }
+
+  Future<void> _playTimerEndSound() async {
+    try {
+      await _audioPlayer.play(AssetSource('sounds/timer_end.mp3'));
+    } catch (e) {
+      debugPrint('Error playing timer end sound: $e');
+    }
   }
 
   @override
@@ -38,7 +49,9 @@ class _ActiveSessionViewState extends State<ActiveSessionView> {
       // 2. Load Data via ViewModel
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (_sessionId != null) {
-          Provider.of<ActiveSessionViewModel>(context, listen: false).loadSession(_sessionId!);
+          final viewModel = Provider.of<ActiveSessionViewModel>(context, listen: false);
+          viewModel.onTimerEnd = _playTimerEndSound;
+          viewModel.loadSession(_sessionId!);
         }
       });
 

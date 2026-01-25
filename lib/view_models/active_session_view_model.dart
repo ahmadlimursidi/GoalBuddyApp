@@ -70,6 +70,9 @@ class ActiveSessionViewModel extends ChangeNotifier {
   bool _isPaused = true;
   int _totalDurationSeconds = 0;
 
+  // Callback for when timer ends
+  VoidCallback? onTimerEnd;
+
   // Getters
   bool get isLoading => _isLoading;
   List<Drill> get drills => _drills;
@@ -242,7 +245,8 @@ class ActiveSessionViewModel extends ChangeNotifier {
       } else {
         // Drill Finished!
         _pauseTimer();
-        // Optional: Auto-advance or play sound here
+        // Trigger callback to play sound
+        onTimerEnd?.call();
       }
     });
   }

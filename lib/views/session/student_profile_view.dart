@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:lottie/lottie.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../config/theme.dart';
 import '../../models/attendance_model.dart';
 import '../../models/student_progress_model.dart';
@@ -425,8 +425,24 @@ class _StudentProfileViewState extends State<StudentProfileView> {
                                 icon: Icons.call,
                                 label: "Contact Parent",
                                 color: AppTheme.pitchGreen,
-                                onTap: () {
-                                  // Call logic
+                                onTap: () async {
+                                  final phone = studentData?['parentPhone'] as String?;
+                                  if (phone != null && phone.isNotEmpty) {
+                                    final uri = Uri.parse('tel:$phone');
+                                    if (await canLaunchUrl(uri)) {
+                                      await launchUrl(uri);
+                                    } else {
+                                      if (context.mounted) {
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          const SnackBar(content: Text('Could not launch phone app')),
+                                        );
+                                      }
+                                    }
+                                  } else {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(content: Text('No phone number available')),
+                                    );
+                                  }
                                 },
                               ),
                             ),

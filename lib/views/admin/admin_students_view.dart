@@ -511,76 +511,92 @@ class _AdminStudentsViewState extends State<AdminStudentsView> {
         padding: const EdgeInsets.all(16),
         child: Row(
           children: [
-            Container(
-              width: 50,
-              height: 50,
-              decoration: BoxDecoration(
-                color: AppTheme.primaryRed.withOpacity(0.1),
-                shape: BoxShape.circle,
-              ),
-              child: Center(
-                child: Text(
-                  data['name'] != null && data['name'].isNotEmpty ? data['name'][0].toUpperCase() : 'S',
-                  style: const TextStyle(color: AppTheme.primaryRed, fontWeight: FontWeight.bold, fontSize: 20),
-                ),
-              ),
-            ),
-            const SizedBox(width: 16),
+            // Tappable profile picture and name
             Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
+              child: InkWell(
+                onTap: () => _showStudentDetails(data),
+                borderRadius: BorderRadius.circular(12),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: Row(
                     children: [
-                      Flexible(
-                        child: Text(
-                          data['name'] ?? 'Unknown',
-                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppTheme.darkText),
-                          overflow: TextOverflow.ellipsis,
+                      Container(
+                        width: 50,
+                        height: 50,
+                        decoration: BoxDecoration(
+                          color: AppTheme.primaryRed.withOpacity(0.1),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Center(
+                          child: Text(
+                            data['name'] != null && data['name'].isNotEmpty ? data['name'][0].toUpperCase() : 'S',
+                            style: const TextStyle(color: AppTheme.primaryRed, fontWeight: FontWeight.bold, fontSize: 20),
+                          ),
                         ),
                       ),
-                      if (hasMedical) ...[
-                        const SizedBox(width: 6),
-                        const Icon(Icons.medical_services, size: 14, color: Colors.orange),
-                      ]
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: AppTheme.pitchGreen.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Text(
-                      data['ageGroup'] ?? 'Unknown',
-                      style: const TextStyle(fontSize: 11, color: AppTheme.pitchGreen, fontWeight: FontWeight.bold),
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Row(
-                    children: [
-                      const Icon(Icons.person_outline, size: 14, color: Colors.grey),
-                      const SizedBox(width: 4),
+                      const SizedBox(width: 16),
                       Expanded(
-                        child: Text(
-                          data['parentEmail'] ?? 'No Parent Email',
-                          style: TextStyle(color: Colors.grey[600], fontSize: 12),
-                          overflow: TextOverflow.ellipsis,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Flexible(
+                                  child: Text(
+                                    data['name'] ?? 'Unknown',
+                                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppTheme.darkText),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                const SizedBox(width: 4),
+                                Icon(Icons.chevron_right, size: 18, color: Colors.grey[400]),
+                                if (hasMedical) ...[
+                                  const SizedBox(width: 2),
+                                  const Icon(Icons.medical_services, size: 14, color: Colors.orange),
+                                ]
+                              ],
+                            ),
+                            Text(
+                              "Tap to view profile",
+                              style: TextStyle(fontSize: 10, color: Colors.grey[500]),
+                            ),
+                            const SizedBox(height: 4),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: AppTheme.pitchGreen.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Text(
+                                data['ageGroup'] ?? 'Unknown',
+                                style: const TextStyle(fontSize: 11, color: AppTheme.pitchGreen, fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Row(
+                              children: [
+                                const Icon(Icons.person_outline, size: 14, color: Colors.grey),
+                                const SizedBox(width: 4),
+                                Expanded(
+                                  child: Text(
+                                    data['parentEmail'] ?? 'No Parent Email',
+                                    style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
                         ),
                       ),
                     ],
                   ),
-                ],
+                ),
               ),
             ),
             Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                IconButton(
-                  icon: const Icon(Icons.chevron_right, color: Colors.grey),
-                  onPressed: () => _showStudentDetails(data),
-                ),
                 PopupMenuButton<String>(
                   icon: const Icon(Icons.more_vert, color: Colors.grey),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
