@@ -11,7 +11,10 @@
       "Bash(findstr:*)",
       "Bash(xargs:*)",
       "Bash(del \"e:\\\\flutter\\\\littlekickersapp\\\\lib\\\\views\\\\admin\\\\admin_coach_profile_view.dart\")",
-      "Bash(flutter pub upgrade:*)"
+      "Bash(flutter pub upgrade:*)",
+      "Bash(flutter build:*)",
+      "Bash(dir:*)",
+      "Bash(cmd /c \"dir e:\\\\flutter\\\\littlekickersapp\\\\build\\\\app\\\\outputs\\\\flutter-apk\")"
     ]
   }
 }

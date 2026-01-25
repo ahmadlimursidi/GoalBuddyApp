@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../config/theme.dart';
 import '../../models/attendance_model.dart';
@@ -253,6 +254,11 @@ class _StudentProfileViewState extends State<StudentProfileView> {
         ),
       );
     }
+
+    // Check if parent is viewing
+    final arguments = ModalRoute.of(context)?.settings.arguments;
+    final args = arguments as Map<String, dynamic>?;
+    final isParentViewing = args?['isParentViewing'] as bool? ?? false;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FA), // Light grey background
@@ -561,6 +567,40 @@ class _StudentProfileViewState extends State<StudentProfileView> {
                         );
                       },
                     ),
+
+                  // Account Section - only show for parent viewing
+                  if (isParentViewing) ...[
+                    const SizedBox(height: 24),
+                    _buildAccountSectionCard(
+                      title: 'Account',
+                      icon: Icons.settings_outlined,
+                      children: [
+                        _buildAccountActionTile(
+                          context,
+                          icon: Icons.lock_outline,
+                          title: 'Change Password',
+                          subtitle: 'Update your password',
+                          color: Colors.blueAccent,
+                          onTap: () => _showChangePasswordDialog(context),
+                        ),
+                        const SizedBox(height: 12),
+                        _buildAccountActionTile(
+                          context,
+                          icon: Icons.logout_rounded,
+                          title: 'Sign Out',
+                          subtitle: 'Securely logout',
+                          color: Colors.redAccent,
+                          isDestructive: true,
+                          onTap: () async {
+                            await FirebaseAuth.instance.signOut();
+                            if (context.mounted) {
+                              Navigator.pushNamedAndRemoveUntil(context, '/', (route) => false);
+                            }
+                          },
+                        ),
+                      ],
+                    ),
+                  ],
                   const SizedBox(height: 30),
                 ],
               ),
@@ -617,6 +657,111 @@ class _StudentProfileViewState extends State<StudentProfileView> {
       boxShadow: [
         BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4)),
       ],
+    );
+  }
+
+  // Account Section Card (like coach_profile_view.dart)
+  Widget _buildAccountSectionCard({
+    required String title,
+    required IconData icon,
+    required List<Widget> children,
+  }) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF90A4AE).withOpacity(0.1),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, color: Colors.grey[800], size: 22),
+              const SizedBox(width: 10),
+              Text(
+                title,
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.grey[800],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          ...children,
+        ],
+      ),
+    );
+  }
+
+  // Account Action Tile (like coach_profile_view.dart)
+  Widget _buildAccountActionTile(
+    BuildContext context, {
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required Color color,
+    required VoidCallback onTap,
+    bool isDestructive = false,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: isDestructive ? Colors.red.withOpacity(0.04) : Colors.grey[50],
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: isDestructive ? Colors.red.withOpacity(0.1) : Colors.transparent,
+          ),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: color.withOpacity(0.15),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(icon, color: color, size: 22),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: isDestructive ? Colors.red : Colors.grey[900],
+                    ),
+                  ),
+                  Text(
+                    subtitle,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: isDestructive ? Colors.red.withOpacity(0.6) : Colors.grey[500],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Icon(Icons.chevron_right_rounded, color: Colors.grey[400], size: 20),
+          ],
+        ),
+      ),
     );
   }
 
@@ -1071,6 +1216,210 @@ class _StudentProfileViewState extends State<StudentProfileView> {
           ),
         ),
       ],
+    );
+  }
+
+  // Change Password Dialog for Parent
+  void _showChangePasswordDialog(BuildContext context) {
+    final currentPasswordController = TextEditingController();
+    final newPasswordController = TextEditingController();
+    final confirmPasswordController = TextEditingController();
+    bool isLoading = false;
+    bool showCurrentPassword = false;
+    bool showNewPassword = false;
+    bool showConfirmPassword = false;
+
+    showDialog(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Row(
+            children: [
+              Icon(Icons.lock_outline, color: AppTheme.primaryRed),
+              SizedBox(width: 12),
+              Text('Change Password'),
+            ],
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: currentPasswordController,
+                  obscureText: !showCurrentPassword,
+                  decoration: InputDecoration(
+                    labelText: 'Current Password',
+                    filled: true,
+                    fillColor: Colors.grey[50],
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
+                    prefixIcon: const Icon(Icons.lock_outline, color: Colors.grey),
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        showCurrentPassword ? Icons.visibility : Icons.visibility_off,
+                        color: Colors.grey,
+                      ),
+                      onPressed: () => setDialogState(() => showCurrentPassword = !showCurrentPassword),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: newPasswordController,
+                  obscureText: !showNewPassword,
+                  decoration: InputDecoration(
+                    labelText: 'New Password',
+                    filled: true,
+                    fillColor: Colors.grey[50],
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
+                    prefixIcon: const Icon(Icons.lock_outline, color: Colors.grey),
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        showNewPassword ? Icons.visibility : Icons.visibility_off,
+                        color: Colors.grey,
+                      ),
+                      onPressed: () => setDialogState(() => showNewPassword = !showNewPassword),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: confirmPasswordController,
+                  obscureText: !showConfirmPassword,
+                  decoration: InputDecoration(
+                    labelText: 'Confirm New Password',
+                    filled: true,
+                    fillColor: Colors.grey[50],
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
+                    prefixIcon: const Icon(Icons.lock_outline, color: Colors.grey),
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        showConfirmPassword ? Icons.visibility : Icons.visibility_off,
+                        color: Colors.grey,
+                      ),
+                      onPressed: () => setDialogState(() => showConfirmPassword = !showConfirmPassword),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: isLoading ? null : () => Navigator.pop(dialogContext),
+              child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+            ),
+            ElevatedButton(
+              onPressed: isLoading
+                  ? null
+                  : () async {
+                      // Validation
+                      if (currentPasswordController.text.isEmpty ||
+                          newPasswordController.text.isEmpty ||
+                          confirmPasswordController.text.isEmpty) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Please fill in all fields'),
+                            backgroundColor: Colors.red,
+                          ),
+                        );
+                        return;
+                      }
+
+                      if (newPasswordController.text.length < 6) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('New password must be at least 6 characters'),
+                            backgroundColor: Colors.red,
+                          ),
+                        );
+                        return;
+                      }
+
+                      if (newPasswordController.text != confirmPasswordController.text) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('New passwords do not match'),
+                            backgroundColor: Colors.red,
+                          ),
+                        );
+                        return;
+                      }
+
+                      setDialogState(() => isLoading = true);
+
+                      try {
+                        final user = FirebaseAuth.instance.currentUser;
+                        if (user == null || user.email == null) {
+                          throw Exception('User not found');
+                        }
+
+                        // Re-authenticate user
+                        final credential = EmailAuthProvider.credential(
+                          email: user.email!,
+                          password: currentPasswordController.text,
+                        );
+                        await user.reauthenticateWithCredential(credential);
+
+                        // Update password
+                        await user.updatePassword(newPasswordController.text);
+
+                        if (dialogContext.mounted) {
+                          Navigator.pop(dialogContext);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Password updated successfully'),
+                              backgroundColor: Colors.green,
+                            ),
+                          );
+                        }
+                      } on FirebaseAuthException catch (e) {
+                        String message = 'Error updating password';
+                        if (e.code == 'wrong-password') {
+                          message = 'Current password is incorrect';
+                        } else if (e.code == 'weak-password') {
+                          message = 'New password is too weak';
+                        }
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text(message), backgroundColor: Colors.red),
+                        );
+                      } catch (e) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Error: ${e.toString()}'),
+                            backgroundColor: Colors.red,
+                          ),
+                        );
+                      } finally {
+                        if (dialogContext.mounted) {
+                          setDialogState(() => isLoading = false);
+                        }
+                      }
+                    },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.primaryRed,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              child: isLoading
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                    )
+                  : const Text('Update Password', style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
