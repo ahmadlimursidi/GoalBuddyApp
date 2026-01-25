@@ -467,14 +467,14 @@ class _StudentListViewState extends State<StudentListView> {
                   width: 50,
                   height: 50,
                   decoration: BoxDecoration(
-                    color: student.isNew ? Colors.orange.withOpacity(0.1) : AppTheme.primaryRed.withOpacity(0.1),
+                    color: AppTheme.primaryRed.withOpacity(0.1),
                     shape: BoxShape.circle,
                   ),
                   child: Center(
                     child: Text(
                       student.name.isNotEmpty ? student.name[0].toUpperCase() : '?',
-                      style: TextStyle(
-                        color: student.isNew ? Colors.orange : AppTheme.primaryRed,
+                      style: const TextStyle(
+                        color: AppTheme.primaryRed,
                         fontWeight: FontWeight.bold,
                         fontSize: 20,
                       ),
@@ -502,24 +502,6 @@ class _StudentListViewState extends State<StudentListView> {
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),
-                          if (student.isNew) ...[
-                            const SizedBox(width: 8),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                              decoration: BoxDecoration(
-                                color: Colors.orange,
-                                borderRadius: BorderRadius.circular(6),
-                              ),
-                              child: const Text(
-                                "NEW",
-                                style: TextStyle(
-                                  fontSize: 10,
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ),
-                          ],
                           if (hasMedicalInfo) ...[
                             const SizedBox(width: 6),
                             const Icon(Icons.medical_services, size: 14, color: Colors.red),

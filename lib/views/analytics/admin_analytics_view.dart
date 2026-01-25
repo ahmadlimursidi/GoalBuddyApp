@@ -432,11 +432,6 @@ class _AdminAnalyticsContent extends StatelessWidget {
                     style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: color),
                   ),
                 ),
-                Text(
-                  "${data.present}/${data.total} Present",
-                  style: TextStyle(fontSize: 11, color: Colors.grey[500]),
-                  textAlign: TextAlign.center,
-                ),
               ],
             ),
           );

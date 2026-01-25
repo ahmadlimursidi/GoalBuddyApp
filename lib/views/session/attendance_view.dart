@@ -337,42 +337,20 @@ class _AttendanceViewState extends State<AttendanceView> {
           });
         },
         leading: CircleAvatar(
-          backgroundColor: student.isNew ? Colors.orange : Colors.blue.shade50,
+          backgroundColor: Colors.blue.shade50,
           child: Text(
             student.name.isNotEmpty ? student.name[0] : '?',
-            style: TextStyle(
-              color: student.isNew ? Colors.white : AppTheme.primaryRed,
+            style: const TextStyle(
+              color: AppTheme.primaryRed,
             ),
           ),
         ),
-        title: Row(
-          children: [
-            Text(
-              student.name,
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                color: student.isPresent ? Colors.black : Colors.grey,
-              ),
-            ),
-            if (student.isNew) ...[
-              const SizedBox(width: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(
-                  color: Colors.orange,
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: const Text(
-                  "NEW",
-                  style: TextStyle(
-                    fontSize: 10,
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              )
-            ]
-          ],
+        title: Text(
+          student.name,
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            color: student.isPresent ? Colors.black : Colors.grey,
+          ),
         ),
         subtitle: Text(
           student.medicalNotes, // Showing age or medical notes
