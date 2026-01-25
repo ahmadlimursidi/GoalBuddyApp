@@ -144,7 +144,7 @@ class _AdminDashboardViewState extends State<AdminDashboardView> {
             });
           },
           items: const [
-            BottomNavigationBarItem(icon: Icon(Icons.dashboard_rounded), label: "Dashboard"),
+            BottomNavigationBarItem(icon: Icon(Icons.dashboard_rounded), label: "Schedule"),
             BottomNavigationBarItem(icon: Icon(Icons.account_balance_wallet_rounded), label: "Finance"),
             BottomNavigationBarItem(icon: Icon(Icons.analytics_rounded), label: "Analytics"),
           ],

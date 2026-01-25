@@ -864,6 +864,7 @@ class _StudentFeesScreenState extends State<StudentFeesScreen> {
                       students: students,
                       parentEmails: parentEmails,
                       monthYear: monthYear,
+                      selectedDate: selectedDate,
                     );
                   },
                 );
@@ -1021,11 +1022,13 @@ class _StudentListWithPaymentStream extends StatefulWidget {
   final List<QueryDocumentSnapshot> students;
   final Map<String, String> parentEmails;
   final String monthYear;
+  final DateTime selectedDate;
 
   const _StudentListWithPaymentStream({
     required this.students,
     required this.parentEmails,
     required this.monthYear,
+    required this.selectedDate,
   });
 
   @override
@@ -1039,6 +1042,7 @@ class _StudentListWithPaymentStreamState extends State<_StudentListWithPaymentSt
   List<QueryDocumentSnapshot> get students => widget.students;
   Map<String, String> get parentEmails => widget.parentEmails;
   String get monthYear => widget.monthYear;
+  DateTime get selectedDate => widget.selectedDate;
 
   @override
   Widget build(BuildContext context) {
@@ -1195,7 +1199,7 @@ class _StudentListWithPaymentStreamState extends State<_StudentListWithPaymentSt
                                             children: [
                                               Icon(Icons.calendar_month, size: 12, color: Colors.green[700]),
                                               const SizedBox(width: 4),
-                                              Text("${DateTime.now().year}", style: TextStyle(fontSize: 10, color: Colors.green[700])),
+                                              Text("${selectedDate.year}", style: TextStyle(fontSize: 10, color: Colors.green[700])),
                                             ],
                                           ),
                                           const SizedBox(height: 4),
@@ -1275,7 +1279,7 @@ class _StudentListWithPaymentStreamState extends State<_StudentListWithPaymentSt
 
   Future<double> _calculateYearlyRevenue() async {
     double total = 0;
-    final currentYear = DateTime.now().year;
+    final targetYear = selectedDate.year;
 
     for (var student in students) {
       try {
@@ -1289,9 +1293,9 @@ class _StudentListWithPaymentStreamState extends State<_StudentListWithPaymentSt
           final data = paymentDoc.data();
           final status = (data['status'] as String?)?.toLowerCase() ?? '';
           if (status == 'paid' || status == 'confirmed') {
-            // Check if payment is from current year
+            // Check if payment is from selected year
             final month = data['month'] as String? ?? '';
-            if (month.contains(currentYear.toString())) {
+            if (month.contains(targetYear.toString())) {
               final amount = data['amount'];
               total += (amount is num) ? amount.toDouble() : 0;
             }
