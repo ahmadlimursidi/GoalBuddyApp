@@ -5,7 +5,10 @@ import '../../view_models/student_parent_view_model.dart';
 import '../../widgets/badge_grid.dart';
 
 class ParentProgressView extends StatefulWidget {
-  const ParentProgressView({super.key});
+  /// If true, renders without Scaffold/AppBar for embedding in another view
+  final bool embedded;
+
+  const ParentProgressView({super.key, this.embedded = false});
 
   @override
   State<ParentProgressView> createState() => _ParentProgressViewState();
@@ -52,7 +55,12 @@ class _ParentProgressViewState extends State<ParentProgressView> {
     print('DEBUG ParentProgressView: mockBadges count = ${mockBadges.length}');
     print('DEBUG ParentProgressView: mockBadges = $mockBadges');
 
-    String? currentBadge = possibleBadges.firstWhere(
+    // Get badges only for the current age group to find the next goal
+    List<String> currentAgeGroupBadges = _getCurrentAgeGroupBadges(ageGroup);
+    print('DEBUG ParentProgressView: currentAgeGroupBadges = $currentAgeGroupBadges');
+
+    // Find the first unearned badge from the current age group only
+    String? currentBadge = currentAgeGroupBadges.firstWhere(
       (badge) => !mockBadges.contains(badge),
       orElse: () => '',
     );
@@ -144,6 +152,33 @@ class _ParentProgressViewState extends State<ParentProgressView> {
     return possibleBadges;
   }
 
+  // Get badges ONLY for the current age group (not cumulative from previous levels)
+  List<String> _getCurrentAgeGroupBadges(String ageGroup) {
+    String normalizedAgeGroup = _normalizeAgeGroup(ageGroup);
+
+    switch (normalizedAgeGroup) {
+      case 'Mega Kickers':
+        return [
+          'mega_attacking', 'mega_defending', 'mega_tactician',
+          'mega_captain', 'mega_all_rounder', 'mega_referee'
+        ];
+      case 'Mighty Kickers':
+        return [
+          'mk_leadership', 'mk_physical_literacy', 'mk_all_rounder',
+          'mk_problem_solver', 'mk_kicking', 'mk_match_play'
+        ];
+      case 'Junior Kickers':
+        return [
+          'jk_kicking', 'jk_imagination', 'jk_physical_literacy', 'jk_team_player'
+        ];
+      case 'Little Kicks':
+      default:
+        return [
+          'lk_attention_listening', 'lk_sharing', 'lk_kicking', 'lk_confidence'
+        ];
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final viewModel = Provider.of<StudentParentViewModel>(context);
@@ -153,16 +188,7 @@ class _ParentProgressViewState extends State<ParentProgressView> {
     print('DEBUG ParentProgressView BUILD: _earnedBadgeIds = $_earnedBadgeIds');
     print('DEBUG ParentProgressView BUILD: _currentBadgeId = $_currentBadgeId');
 
-    return Scaffold(
-      backgroundColor: const Color(0xFFF5F7FA),
-      appBar: AppBar(
-        title: const Text("Child Progress"),
-        backgroundColor: AppTheme.primaryRed,
-        foregroundColor: Colors.white,
-        elevation: 0,
-        centerTitle: true,
-      ),
-      body: Column(
+    final body = Column(
         children: [
           // Header with gradient
           Container(
@@ -328,7 +354,23 @@ class _ParentProgressViewState extends State<ParentProgressView> {
                   ),
           ),
         ],
+    );
+
+    // If embedded, return just the body without Scaffold
+    if (widget.embedded) {
+      return body;
+    }
+
+    return Scaffold(
+      backgroundColor: const Color(0xFFF5F7FA),
+      appBar: AppBar(
+        title: const Text("Child Progress"),
+        backgroundColor: AppTheme.primaryRed,
+        foregroundColor: Colors.white,
+        elevation: 0,
+        centerTitle: true,
       ),
+      body: body,
     );
   }
 

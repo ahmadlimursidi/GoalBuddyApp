@@ -32,6 +32,7 @@ import 'views/admin/send_notification_view.dart';
 import 'views/splash/splash_view.dart';
 import 'views/finance/finance_view.dart';
 import 'views/parent/parent_schedule_view.dart';
+import 'views/parent/parent_progress_view.dart';
 import 'views/notifications/notifications_view.dart';
 import 'services/notification_service.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -92,6 +93,7 @@ class MyApp extends StatelessWidget {
         '/admin_analytics': (context) => const AdminAnalyticsView(), // Add admin analytics route
         '/student_parent_dashboard': (context) => const StudentParentDashboardView(), // Add student/parent dashboard route
         '/parent_schedule': (context) => const ParentScheduleView(), // Add parent schedule route
+        '/parent_progress': (context) => const ParentProgressView(), // Add parent progress route
         '/active_session': (context) => const ActiveSessionView(),
         '/attendance': (context) => const AttendanceView(),
         '/student_profile': (context) => const StudentProfileView(),

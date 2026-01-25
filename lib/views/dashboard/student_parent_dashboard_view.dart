@@ -4,11 +4,11 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../config/theme.dart';
 import '../../view_models/auth_view_model.dart';
 import '../../view_models/student_parent_view_model.dart';
-import '../../widgets/badge_grid.dart';
 import '../../models/drill_data.dart';
 import '../../services/firestore_service.dart';
 import '../admin/session_template_details_view.dart';
 import '../payment/payment_details_view.dart';
+import '../parent/parent_progress_view.dart';
 
 class StudentParentDashboardView extends StatefulWidget {
   const StudentParentDashboardView({super.key});
@@ -45,7 +45,7 @@ class _StudentParentDashboardViewState extends State<StudentParentDashboardView>
         currentBody = _buildScheduleContent(studentParentViewModel);
         break;
       case 2:
-        currentBody = _buildProgressContent(studentParentViewModel);
+        currentBody = const ParentProgressView(embedded: true);
         break;
       default:
         currentBody = _buildHomeContent(studentParentViewModel);
@@ -378,7 +378,7 @@ class _StudentParentDashboardViewState extends State<StudentParentDashboardView>
                               icon: Icons.emoji_events,
                               label: "Check\nProgress",
                               color: Colors.orange,
-                              onTap: () => setState(() => _currentIndex = 2),
+                              onTap: () => Navigator.pushNamed(context, '/parent_progress'),
                             ),
                           ),
                         ],
@@ -574,209 +574,6 @@ class _StudentParentDashboardViewState extends State<StudentParentDashboardView>
         ],
       ),
     );
-  }
-
-  Widget _buildProgressContent(StudentParentViewModel viewModel) {
-    return RefreshIndicator(
-      onRefresh: () => viewModel.refreshData(),
-      child: SingleChildScrollView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Header
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.fromLTRB(24, 10, 24, 20),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.05),
-                    blurRadius: 5,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text("Achievements", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: AppTheme.darkText)),
-                  const SizedBox(height: 4),
-                  Text("Track your child's badges and skills", style: TextStyle(color: Colors.grey[600], fontSize: 14)),
-                ],
-              ),
-            ),
-
-            Padding(
-              padding: const EdgeInsets.all(20),
-              child: Consumer<StudentParentViewModel>(
-                builder: (context, viewModel, child) {
-                  if (viewModel.isLoading) {
-                    return const Center(child: CircularProgressIndicator(color: AppTheme.primaryRed));
-                  }
-
-                  // Check if student data failed to load
-                  if (viewModel.studentId == null && !viewModel.isLoading) {
-                    return Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.error_outline, size: 60, color: Colors.grey[400]),
-                          const SizedBox(height: 16),
-                          const Text(
-                            "No student data found",
-                            style: TextStyle(
-                              fontSize: 18,
-                              color: Colors.grey,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          const Text(
-                            "Please contact admin to link your account",
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: Colors.grey,
-                            ),
-                            textAlign: TextAlign.center,
-                          ),
-                        ],
-                      ),
-                    );
-                  }
-
-                  // Get age group and generate mock badges if real badges are empty
-                  String ageGroup = _normalizeAgeGroup(viewModel.childAgeGroup ?? 'Junior Kickers');
-                  List<String> possibleBadges = _getPossibleBadgesForAgeGroup(ageGroup);
-
-                  // Use real badges if available, otherwise use mock badges
-                  List<String> earnedBadgeIds = viewModel.childBadges.isNotEmpty
-                      ? viewModel.childBadges.map((b) => b['id'] as String).toList()
-                      : _generateMockBadges(ageGroup, possibleBadges);
-
-                  // Calculate current badge (first unearned)
-                  String? currentBadgeId = possibleBadges.firstWhere(
-                    (badge) => !earnedBadgeIds.contains(badge),
-                    orElse: () => '',
-                  );
-                  if (currentBadgeId.isEmpty) currentBadgeId = null;
-
-                  // Stats Row
-                  return Column(
-                    children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _buildStatContainer(
-                              "Badges Earned",
-                              "${earnedBadgeIds.length}",
-                              Icons.emoji_events,
-                              Colors.amber,
-                            ),
-                          ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: _buildStatContainer(
-                              "Attendance",
-                              "${viewModel.attendanceRate.toStringAsFixed(0)}%",
-                              Icons.check_circle,
-                              AppTheme.pitchGreen,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 24),
-
-                      // Badge Grid
-                      if (viewModel.studentId != null)
-                        BadgeGrid(
-                          ageGroup: ageGroup,
-                          earnedBadgeIds: earnedBadgeIds,
-                          currentBadgeId: currentBadgeId,
-                        ),
-                    ],
-                  );
-                },
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // Normalize age group name to match badge_data.dart format
-  String _normalizeAgeGroup(String ageGroup) {
-    String normalized = ageGroup.toLowerCase().trim();
-
-    if (normalized.contains('little') && normalized.contains('kick')) {
-      return 'Little Kicks';
-    } else if (normalized.contains('junior') && normalized.contains('kick')) {
-      return 'Junior Kickers';
-    } else if (normalized.contains('mighty') && normalized.contains('kick')) {
-      return 'Mighty Kickers';
-    } else if (normalized.contains('mega') && normalized.contains('kick')) {
-      return 'Mega Kickers';
-    }
-
-    return ageGroup;
-  }
-
-  // Generate mock badges based on age group
-  List<String> _generateMockBadges(String ageGroup, List<String> possibleBadges) {
-    String normalizedAgeGroup = _normalizeAgeGroup(ageGroup);
-
-    int count;
-    switch (normalizedAgeGroup) {
-      case 'Mega Kickers':
-        count = 6;
-        break;
-      case 'Mighty Kickers':
-        count = 4;
-        break;
-      case 'Junior Kickers':
-        count = 3;
-        break;
-      case 'Little Kicks':
-      default:
-        count = 2;
-        break;
-    }
-    count = count.clamp(0, possibleBadges.length);
-    return possibleBadges.take(count).toList();
-  }
-
-  // Get possible badges based on age group
-  List<String> _getPossibleBadgesForAgeGroup(String ageGroup) {
-    String normalizedAgeGroup = _normalizeAgeGroup(ageGroup);
-
-    List<String> possibleBadges = [];
-    if (normalizedAgeGroup == 'Mega Kickers') {
-      possibleBadges.addAll([
-        'lk_attention_listening', 'lk_sharing', 'lk_kicking', 'lk_confidence',
-        'jk_kicking', 'jk_imagination', 'jk_physical_literacy', 'jk_team_player',
-        'mk_leadership', 'mk_physical_literacy', 'mk_all_rounder', 'mk_problem_solver', 'mk_kicking', 'mk_match_play',
-        'mega_attacking', 'mega_defending', 'mega_tactician', 'mega_captain', 'mega_all_rounder', 'mega_referee'
-      ]);
-    } else if (normalizedAgeGroup == 'Mighty Kickers') {
-      possibleBadges.addAll([
-        'lk_attention_listening', 'lk_sharing', 'lk_kicking', 'lk_confidence',
-        'jk_kicking', 'jk_imagination', 'jk_physical_literacy', 'jk_team_player',
-        'mk_leadership', 'mk_physical_literacy', 'mk_all_rounder', 'mk_problem_solver', 'mk_kicking', 'mk_match_play'
-      ]);
-    } else if (normalizedAgeGroup == 'Junior Kickers') {
-      possibleBadges.addAll([
-        'lk_attention_listening', 'lk_sharing', 'lk_kicking', 'lk_confidence',
-        'jk_kicking', 'jk_imagination', 'jk_physical_literacy', 'jk_team_player'
-      ]);
-    } else {
-      // Little Kicks or default
-      possibleBadges.addAll([
-        'lk_attention_listening', 'lk_sharing', 'lk_kicking', 'lk_confidence'
-      ]);
-    }
-    return possibleBadges;
   }
 
   // --- Helper Widgets ---
@@ -1308,45 +1105,6 @@ class _StudentParentDashboardViewState extends State<StudentParentDashboardView>
         );
       }
     }
-  }
-
-  Widget _buildStatContainer(String label, String value, IconData icon, Color color) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.03),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        children: [
-          Icon(icon, color: color, size: 28),
-          const SizedBox(height: 8),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
-              color: color,
-            ),
-          ),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 12,
-              color: Colors.grey[600],
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-        ],
-      ),
-    );
   }
 
   String _getInitials(String name) {
