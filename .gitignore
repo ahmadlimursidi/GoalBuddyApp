@@ -51,8 +51,12 @@ functions/.npm/
 # Windows reserved names
 nul
 
-# Thesis files (not part of app source code)
+# Thesis and documentation files (not part of app source code)
 thesis*.md
+literature_review_matrix.md
+presentation_slides.md
+FYP_Proposal_214761.docx
+*Survey*.csv
 
 # API Keys and Sensitive Configuration
 lib/config/api_keys.dart
