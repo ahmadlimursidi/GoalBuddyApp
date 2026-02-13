@@ -51,6 +51,9 @@ functions/.npm/
 # Windows reserved names
 nul
 
+# Claude Code settings
+.claude/
+
 # Thesis and documentation files (not part of app source code)
 thesis*.md
 literature_review_matrix.md
