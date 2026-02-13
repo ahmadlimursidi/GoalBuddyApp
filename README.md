@@ -1,6 +1,6 @@
-# Little Kickers Coach Companion App (GoalBuddy)
+# GoalBuddy App
 
-A comprehensive mobile application for managing Little Kickers football academy operations, including session planning, attendance tracking, AI-powered lesson plan extraction, and automated notifications.
+A comprehensive mobile application for managing football academy operations, including session planning, attendance tracking, AI-powered lesson plan extraction, and automated notifications.
 
 ## Features
 
