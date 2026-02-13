@@ -60,6 +60,9 @@ literature_review_matrix.md
 presentation_slides.md
 FYP_Proposal_214761.docx
 *Survey*.csv
+interview transcripts/
+*interview*transcripts*.md
+*Interview*Transcripts*.md
 
 # API Keys and Sensitive Configuration
 lib/config/api_keys.dart
