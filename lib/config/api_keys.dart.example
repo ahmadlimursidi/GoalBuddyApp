@@ -1,0 +1,23 @@
+/// API Keys Configuration
+/// Copy this file to 'api_keys.dart' and replace the placeholder values with your actual keys.
+/// See README.md for detailed setup instructions.
+
+class ApiKeys {
+  // Google Gemini AI API Key
+  // Get your key from: https://aistudio.google.com/apikey
+  static const String geminiApiKey = 'YOUR_GEMINI_API_KEY_HERE';
+
+  // Firebase Configuration Keys
+  // These are included in firebase_options.dart and google-services.json
+  // Replace with your Firebase project keys
+  static const String firebaseWebApiKey = 'YOUR_FIREBASE_WEB_API_KEY_HERE';
+  static const String firebaseAndroidApiKey = 'YOUR_FIREBASE_ANDROID_API_KEY_HERE';
+
+  // Firebase Project Details
+  // Replace with your Firebase project details
+  static const String projectId = 'your-project-id';
+  static const String messagingSenderId = 'your-messaging-sender-id';
+  static const String appId = 'your-app-id';
+  static const String androidAppId = 'your-android-app-id';
+  static const String storageBucket = 'your-project-id.firebasestorage.app';
+}

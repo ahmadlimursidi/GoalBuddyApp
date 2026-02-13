@@ -1,9 +1,10 @@
 import 'dart:typed_data';
 import 'package:google_generative_ai/google_generative_ai.dart';
+import '../config/api_keys.dart';
 
 class GeminiService {
-  // ⚠️ Replace with your actual key from aistudio.google.com
-  static const String _apiKey = 'AIzaSyCxMNaouejURaEqASAXaJ9r_GO3t9IC1Qs';
+  // API key imported from centralized config
+  static const String _apiKey = ApiKeys.geminiApiKey;
 
   late final GenerativeModel _model;
 

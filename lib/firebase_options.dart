@@ -1,5 +1,6 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart' show defaultTargetPlatform, TargetPlatform, kIsWeb;
+import 'config/api_keys.dart';
 
 class DefaultFirebaseOptions {
   static FirebaseOptions get currentPlatform {
@@ -19,21 +20,20 @@ class DefaultFirebaseOptions {
   }
 
   static const FirebaseOptions web = FirebaseOptions(
-  
-    apiKey: "AIzaSyCU4pbNSLQLH4glCkoIBrxT4NuF2g1_6Ag",
-    authDomain: "lkcpcoachcompanion.firebaseapp.com",
-    projectId: "lkcpcoachcompanion",
-    storageBucket: "lkcpcoachcompanion.firebasestorage.app",
-    messagingSenderId: "1004686709332",
-    appId: "1:1004686709332:web:1dc9d17fe95f104ea193c1",
+    apiKey: ApiKeys.firebaseWebApiKey,
+    authDomain: "${ApiKeys.projectId}.firebaseapp.com",
+    projectId: ApiKeys.projectId,
+    storageBucket: ApiKeys.storageBucket,
+    messagingSenderId: ApiKeys.messagingSenderId,
+    appId: ApiKeys.appId,
   );
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: "YOUR_API_KEY",
-    appId: "YOUR_APP_ID",
-    messagingSenderId: "YOUR_SENDER_ID",
-    projectId: "YOUR_PROJECT_ID",
-    storageBucket: "YOUR_PROJECT.appspot.com",
+    apiKey: ApiKeys.firebaseAndroidApiKey,
+    appId: ApiKeys.androidAppId,
+    messagingSenderId: ApiKeys.messagingSenderId,
+    projectId: ApiKeys.projectId,
+    storageBucket: ApiKeys.storageBucket,
   );
 
   static const FirebaseOptions ios = FirebaseOptions(

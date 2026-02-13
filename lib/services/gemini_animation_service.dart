@@ -1,9 +1,10 @@
 import 'dart:convert';
 import 'package:google_generative_ai/google_generative_ai.dart';
 import '../models/drill_animation_data.dart';
+import '../config/api_keys.dart';
 
 class GeminiAnimationService {
-  static const String _apiKey = 'AIzaSyCxMNaouejURaEqASAXaJ9r_GO3t9IC1Qs';
+  static const String _apiKey = ApiKeys.geminiApiKey;
   late final GenerativeModel _model;
 
   GeminiAnimationService() {

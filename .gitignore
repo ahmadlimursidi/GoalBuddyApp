@@ -50,3 +50,13 @@ functions/.npm/
 
 # Windows reserved names
 nul
+
+# Thesis files (not part of app source code)
+thesis*.md
+
+# API Keys and Sensitive Configuration
+lib/config/api_keys.dart
+android/app/google-services.json
+ios/Runner/GoogleService-Info.plist
+.env
+functions/.env
